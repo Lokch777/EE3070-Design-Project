@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft 伺服器儀表板</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f4f4f4; color: #333; text-align: center; padding: 50px; }
+        .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); display: inline-block; }
+        h1 { color: #0078D4; }
+        .status { font-size: 1.5em; margin: 20px 0; }
+        a { display: block; margin: 10px; padding: 10px 20px; background-color: #0078D4; color: white; text-decoration: none; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Minecraft 伺服器儀表板</h1>
+        <p>mc.lueklake.me</p>
+        <div class="status">
+            <!-- 您可以手動更新此處的狀態 -->
+            <strong>當前狀態：</strong> <span style="color: green;">運行中</span>
+        </div>
+        <a href="https://portal.azure.com/#@hkuspace365.onmicrosoft.com/resource/subscriptions/386c0c6b-2edc-4f02-9fbf-3d6c353a812a/resourceGroups/MinecraftServerGroup/providers/Microsoft.Compute/virtualMachines/MyMinecraftServer/overview" target="_blank">前往 Azure VM 總覽</a>
+        <a href="https://portal.azure.com/#@hkuspace365.onmicrosoft.com/resource/subscriptions/386c0c6b-2edc-4f02-9fbf-3d6c353a812a/resourceGroups/MinecraftServerGroup/providers/Microsoft.Compute/virtualMachines/MyMinecraftServer/providers/Microsoft.Insights/insights" target="_blank">查看 VM 效能監控</a>
+    </div>
+</body>
+</html>
