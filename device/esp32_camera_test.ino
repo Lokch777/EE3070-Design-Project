@@ -15,6 +15,8 @@
 #include <WiFi.h>
 #include <ArduinoWebsockets.h>
 #include "esp_camera.h"
+#include "soc/soc.h"           // Disable brownout problems
+#include "soc/rtc_cntl_reg.h"  // Disable brownout problems
 
 // WiFi credentials
 const char* ssid = "YOUR_WIFI_SSID";
@@ -48,23 +50,38 @@ WebsocketsClient client;
 
 void setup() {
   Serial.begin(115200);
+  delay(1000);  // Give serial time to initialize
   Serial.println("\n\nESP32 Camera Upload Test");
   
+  // Disable brownout detector (can cause reboots)
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+  
   // Initialize camera
+  Serial.println("Initializing camera...");
   if (!initCamera()) {
-    Serial.println("Camera init failed!");
-    return;
+    Serial.println("Camera init failed! Halting.");
+    while(1) {
+      delay(1000);  // Halt instead of continuing
+    }
   }
-  Serial.println("Camera initialized");
+  Serial.println("Camera initialized successfully");
   
   // Connect to WiFi
   connectWiFi();
+  
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi failed! Halting.");
+    while(1) {
+      delay(1000);
+    }
+  }
   
   // Connect to WebSocket
   connectWebSocket();
   
   // Take and send test photo
-  delay(2000);
+  Serial.println("Waiting 3 seconds before first capture...");
+  delay(3000);
   captureAndSend();
 }
 
@@ -74,12 +91,18 @@ void loop() {
     client.poll();
   } else {
     Serial.println("WebSocket disconnected, reconnecting...");
+    delay(1000);
     connectWebSocket();
   }
   
-  // Send image every 10 seconds for testing
-  delay(10000);
-  captureAndSend();
+  // Send image every 15 seconds for testing
+  static unsigned long lastCapture = 0;
+  if (millis() - lastCapture > 15000) {
+    lastCapture = millis();
+    captureAndSend();
+  }
+  
+  delay(100);  // Small delay to prevent watchdog issues
 }
 
 bool initCamera() {
@@ -107,11 +130,11 @@ bool initCamera() {
   
   // Image quality settings
   if (psramFound()) {
-    config.frame_size = FRAMESIZE_VGA;  // 640x480
+    config.frame_size = FRAMESIZE_SVGA;  // 800x600
     config.jpeg_quality = 10;
     config.fb_count = 2;
   } else {
-    config.frame_size = FRAMESIZE_SVGA;
+    config.frame_size = FRAMESIZE_VGA;  // 640x480 for no PSRAM
     config.jpeg_quality = 12;
     config.fb_count = 1;
   }
@@ -167,6 +190,11 @@ void connectWebSocket() {
 }
 
 void captureAndSend() {
+  if (!client.available()) {
+    Serial.println("WebSocket not connected, skipping capture");
+    return;
+  }
+  
   Serial.println("\n--- Capturing image ---");
   
   // Capture image
@@ -176,21 +204,38 @@ void captureAndSend() {
     return;
   }
   
-  Serial.printf("Image captured: %d bytes\n", fb->len);
+  Serial.printf("Image captured: %d bytes, %dx%d\n", fb->len, fb->width, fb->height);
+  
+  // Check image size (max 200KB as per spec)
+  if (fb->len > 200000) {
+    Serial.println("Warning: Image too large! Consider reducing quality.");
+  }
   
   // Generate request ID
-  String reqId = "esp32-" + String(millis());
+  String reqId = "esp32-test-" + String(millis());
   
   // Send JSON header
   String header = "{\"req_id\":\"" + reqId + "\",\"size\":" + String(fb->len) + ",\"format\":\"jpeg\"}";
   Serial.println("Sending header: " + header);
-  client.send(header);
+  
+  bool headerSent = client.send(header);
+  if (!headerSent) {
+    Serial.println("Failed to send header!");
+    esp_camera_fb_return(fb);
+    return;
+  }
+  
+  delay(100);  // Small delay between header and data
   
   // Send binary image data
   Serial.println("Sending image data...");
-  client.sendBinary((const char*)fb->buf, fb->len);
+  bool dataSent = client.sendBinary((const char*)fb->buf, fb->len);
   
-  Serial.println("Image sent!");
+  if (dataSent) {
+    Serial.println("Image sent successfully!");
+  } else {
+    Serial.println("Failed to send image data!");
+  }
   
   // Return frame buffer
   esp_camera_fb_return(fb);
