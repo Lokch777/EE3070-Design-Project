@@ -27,7 +27,8 @@ const char* serverHost = "your-ec2-public-ip";  // e.g., "54.123.45.67"
 const int serverPort = 8000;
 const char* websocketPath = "/ws_camera";
 
-// Camera pins for ESP32-CAM (AI-Thinker model)
+// Camera pins for ESP32-CAM with OV3660 (8GB PSRAM)
+// Note: OV3660 uses same pin configuration as OV2640 on ESP32-CAM AI-Thinker
 #define PWDN_GPIO_NUM     32
 #define RESET_GPIO_NUM    -1
 #define XCLK_GPIO_NUM      0
@@ -128,12 +129,14 @@ bool initCamera() {
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
   
-  // Image quality settings
+  // Image quality settings (optimized for 8GB PSRAM + OV3660)
   if (psramFound()) {
-    config.frame_size = FRAMESIZE_SVGA;  // 800x600
-    config.jpeg_quality = 10;
-    config.fb_count = 2;
+    Serial.println("PSRAM found! Using high quality settings");
+    config.frame_size = FRAMESIZE_SVGA;  // 800x600 (OV3660 supports up to 3MP)
+    config.jpeg_quality = 10;  // Lower number = higher quality
+    config.fb_count = 2;  // Double buffering with PSRAM
   } else {
+    Serial.println("No PSRAM! Using conservative settings");
     config.frame_size = FRAMESIZE_VGA;  // 640x480 for no PSRAM
     config.jpeg_quality = 12;
     config.fb_count = 1;
