@@ -19,6 +19,7 @@ def mock_settings():
     return Settings(
         asr_api_key="test_asr_key",
         vision_api_key="test_vision_key",
+        tts_api_key="test_tts_key",
         server_host="127.0.0.1",
         server_port=8000,
         log_level="DEBUG"

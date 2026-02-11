@@ -14,6 +14,13 @@ class EventType(str, Enum):
     VISION_STARTED = "vision_started"
     VISION_RESULT = "vision_result"
     ERROR = "error"
+    # New TTS-related events
+    QUESTION_DETECTED = "question_detected"
+    AUDIO_READY = "audio_ready"
+    PLAYBACK_STARTED = "playback_started"
+    PLAYBACK_COMPLETE = "playback_complete"
+    PLAYBACK_ERROR = "playback_error"
+    TTS_ERROR = "tts_error"
 
 
 class ConnectionType(str, Enum):

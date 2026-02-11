@@ -43,3 +43,7 @@ Pillow==10.1.0
 
 # Audio processing (for validation)
 numpy==1.26.2
+
+# Fuzzy string matching
+fuzzywuzzy==0.18.0
+python-Levenshtein==0.23.0
