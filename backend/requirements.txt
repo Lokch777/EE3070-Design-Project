@@ -1,0 +1,45 @@
+# ESP32 ASR Capture Vision MVP - Python Dependencies
+
+# Web framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# WebSocket support
+websockets==12.0
+python-socketio==5.10.0
+
+# Async support
+asyncio==3.4.3
+aiofiles==23.2.1
+
+# HTTP client
+httpx==0.25.1
+aiohttp==3.9.1
+requests==2.31.0
+
+# Data validation
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Environment variables
+python-dotenv==1.0.0
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+hypothesis==6.92.1
+websocket-client==1.6.4
+
+# Mocking
+pytest-mock==3.12.0
+
+# Logging
+structlog==23.2.0
+
+# Image processing
+Pillow==10.1.0
+
+# Audio processing (for validation)
+numpy==1.26.2

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 ASR 視覺辨識 MVP</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>ESP32 ASR 視覺辨識系統</h1>
+            <div class="connection-status" id="connectionStatus">
+                <span class="status-indicator" id="statusIndicator"></span>
+                <span id="statusText">連線中...</span>
+            </div>
+        </header>
+
+        <main>
+            <!-- ASR 文字顯示區域 -->
+            <section class="asr-section">
+                <h2>語音辨識</h2>
+                <div class="asr-display" id="asrDisplay">
+                    <div class="asr-text" id="asrText">等待語音輸入...</div>
+                </div>
+            </section>
+
+            <!-- 觸發事件列表 -->
+            <section class="events-section">
+                <h2>觸發事件</h2>
+                <div class="events-list" id="eventsList">
+                    <p class="no-events">尚無觸發事件</p>
+                </div>
+            </section>
+
+            <!-- 影像顯示區域 -->
+            <section class="image-section">
+                <h2>最新快照</h2>
+                <div class="image-display" id="imageDisplay">
+                    <p class="no-image">等待拍照...</p>
+                </div>
+            </section>
+
+            <!-- 視覺辨識結果 -->
+            <section class="vision-section">
+                <h2>辨識結果</h2>
+                <div class="vision-result" id="visionResult">
+                    <p class="no-result">等待辨識結果...</p>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>ESP32 ASR Capture Vision MVP v0.1.0</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
