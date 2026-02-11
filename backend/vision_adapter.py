@@ -43,16 +43,16 @@ class QwenOmniAdapter(VisionLLMAdapter):
         api_key: str,
         model: str = "qwen-vl-plus",
         endpoint: str = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
-        timeout_seconds: int = 15
+        timeout_seconds: int = 8
     ):
         self.api_key = api_key
         self.model = model
         self.endpoint = endpoint
         self.timeout_seconds = timeout_seconds
-        self.max_retries = 1
+        self.max_retries = 0  # No retries for vision (requirement 4.4)
         self.retry_delay = 5
         
-        logger.info(f"QwenOmniAdapter initialized with model: {model}")
+        logger.info(f"QwenOmniAdapter initialized with model: {model}, timeout: {timeout_seconds}s")
     
     async def analyze_image(
         self,
@@ -60,7 +60,10 @@ class QwenOmniAdapter(VisionLLMAdapter):
         prompt: str,
         req_id: str
     ) -> VisionResult:
-        """Analyze image using Qwen Omni Flash API"""
+        """
+        Analyze image using Qwen Omni Flash API with 8-second timeout.
+        Returns fallback error message on timeout or API error.
+        """
         
         # Encode image to base64
         image_b64 = base64.b64encode(image_bytes).decode('utf-8')
@@ -93,89 +96,77 @@ class QwenOmniAdapter(VisionLLMAdapter):
             }
         }
         
-        # Try with retry
-        for attempt in range(self.max_retries + 1):
-            try:
-                logger.info(f"Calling vision API (attempt {attempt + 1}/{self.max_retries + 1})")
-                
-                async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                    response = await client.post(
-                        self.endpoint,
-                        headers=headers,
-                        json=payload
-                    )
-                    
-                    if response.status_code == 200:
-                        result = response.json()
-                        
-                        # Extract text from response
-                        output = result.get("output", {})
-                        choices = output.get("choices", [])
-                        
-                        if choices:
-                            message = choices[0].get("message", {})
-                            content = message.get("content", [])
-                            
-                            # Find text content
-                            text_content = ""
-                            for item in content:
-                                if isinstance(item, dict) and item.get("text"):
-                                    text_content = item["text"]
-                                    break
-                            
-                            if text_content:
-                                logger.info(f"Vision analysis successful for req_id={req_id}")
-                                return VisionResult(
-                                    text=text_content,
-                                    confidence=None,
-                                    error=None
-                                )
-                        
-                        # No valid response
-                        error_msg = "No valid response from vision model"
-                        logger.error(error_msg)
-                        return VisionResult(text="", confidence=None, error=error_msg)
-                    
-                    else:
-                        error_msg = f"API error: {response.status_code} - {response.text}"
-                        logger.error(error_msg)
-                        
-                        # Retry on server errors
-                        if response.status_code >= 500 and attempt < self.max_retries:
-                            logger.info(f"Retrying in {self.retry_delay}s...")
-                            await asyncio.sleep(self.retry_delay)
-                            continue
-                        
-                        return VisionResult(text="", confidence=None, error=error_msg)
-                
-            except asyncio.TimeoutError:
-                error_msg = f"Vision API timeout ({self.timeout_seconds}s)"
-                logger.error(error_msg)
-                
-                if attempt < self.max_retries:
-                    logger.info(f"Retrying in {self.retry_delay}s...")
-                    await asyncio.sleep(self.retry_delay)
-                    continue
-                
-                return VisionResult(text="", confidence=None, error=error_msg)
+        try:
+            logger.info(f"Calling vision API with {self.timeout_seconds}s timeout")
             
-            except Exception as e:
-                error_msg = f"Vision API error: {str(e)}"
-                logger.error(error_msg)
+            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                response = await client.post(
+                    self.endpoint,
+                    headers=headers,
+                    json=payload
+                )
                 
-                if attempt < self.max_retries:
-                    logger.info(f"Retrying in {self.retry_delay}s...")
-                    await asyncio.sleep(self.retry_delay)
-                    continue
+                if response.status_code == 200:
+                    result = response.json()
+                    
+                    # Extract text from response
+                    output = result.get("output", {})
+                    choices = output.get("choices", [])
+                    
+                    if choices:
+                        message = choices[0].get("message", {})
+                        content = message.get("content", [])
+                        
+                        # Find text content
+                        text_content = ""
+                        for item in content:
+                            if isinstance(item, dict) and item.get("text"):
+                                text_content = item["text"]
+                                break
+                        
+                        if text_content:
+                            logger.info(f"Vision analysis successful for req_id={req_id}")
+                            return VisionResult(
+                                text=text_content,
+                                confidence=None,
+                                error=None
+                            )
+                    
+                    # No valid response - return fallback
+                    error_msg = "No valid response from vision model"
+                    logger.error(error_msg)
+                    return VisionResult(
+                        text="I couldn't analyze the image, please try again",
+                        confidence=None,
+                        error=error_msg
+                    )
                 
-                return VisionResult(text="", confidence=None, error=error_msg)
+                else:
+                    error_msg = f"API error: {response.status_code} - {response.text}"
+                    logger.error(error_msg)
+                    return VisionResult(
+                        text="I couldn't analyze the image, please try again",
+                        confidence=None,
+                        error=error_msg
+                    )
+            
+        except asyncio.TimeoutError:
+            error_msg = f"Vision API timeout ({self.timeout_seconds}s exceeded)"
+            logger.error(f"{error_msg} for req_id={req_id}")
+            return VisionResult(
+                text="I couldn't analyze the image, please try again",
+                confidence=None,
+                error=error_msg
+            )
         
-        # All retries failed
-        return VisionResult(
-            text="",
-            confidence=None,
-            error="All retry attempts failed"
-        )
+        except Exception as e:
+            error_msg = f"Vision API error: {str(e)}"
+            logger.error(f"{error_msg} for req_id={req_id}")
+            return VisionResult(
+                text="I couldn't analyze the image, please try again",
+                confidence=None,
+                error=error_msg
+            )
 
 
 class MockVisionAdapter(VisionLLMAdapter):

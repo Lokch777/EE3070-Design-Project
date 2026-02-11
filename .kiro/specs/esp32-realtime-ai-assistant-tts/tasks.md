@@ -127,36 +127,36 @@ This implementation plan extends the existing "esp32-asr-capture-vision-mvp" sys
   - Verify ESP32 firmware plays audio through I2S
   - Ask the user if questions arise
 
-- [ ] 7. Implement error handling and recovery
-  - [ ] 7.1 Create error message generation system
+- [x] 7. Implement error handling and recovery
+  - [x] 7.1 Create error message generation system
     - Implement error message mapping for each error type
     - Add pre-recorded error message support
     - Integrate error messages with TTS_Adapter
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6_
   
-  - [ ] 7.2 Implement retry logic for capture and vision
+  - [x] 7.2 Implement retry logic for capture and vision
     - Add retry logic to capture coordinator (up to 2 retries)
     - Add timeout enforcement for vision processing (8 seconds)
     - Add fallback responses for vision errors
     - _Requirements: 3.3, 4.4, 4.5_
   
-  - [ ] 7.3 Write property test for error message generation
+  - [x] 7.3 Write property test for error message generation
     - **Property 15: Error message generation**
     - **Validates: Requirements 8.1**
   
-  - [ ] 7.4 Write property test for capture retry logic
+  - [x] 7.4 Write property test for capture retry logic
     - **Property 6: Capture retry logic**
     - **Validates: Requirements 3.3**
   
-  - [ ] 7.5 Write property test for vision timeout enforcement
+  - [x] 7.5 Write property test for vision timeout enforcement
     - **Property 8: Vision timeout enforcement**
     - **Validates: Requirements 4.4**
   
-  - [ ] 7.6 Write property test for vision error handling
+  - [x] 7.6 Write property test for vision error handling
     - **Property 9: Vision error handling**
     - **Validates: Requirements 4.5**
   
-  - [ ] 7.7 Write unit tests for specific error messages
+  - [x] 7.7 Write unit tests for specific error messages
     - Test ASR failure error message
     - Test camera failure error message
     - Test vision failure error message
@@ -164,97 +164,97 @@ This implementation plan extends the existing "esp32-asr-capture-vision-mvp" sys
     - Test network loss error message
     - _Requirements: 8.2, 8.3, 8.4, 8.5, 8.6_
 
-- [ ] 8. Implement resource management and concurrency control
-  - [ ] 8.1 Add concurrent request limitation
+- [x] 8. Implement resource management and concurrency control
+  - [x] 8.1 Add concurrent request limitation
     - Implement request queue with single active request
     - Reject new requests when one is in progress
     - Release lock on playback completion or error
     - _Requirements: 11.3_
   
-  - [ ] 8.2 Add low memory protection for ESP32
+  - [x] 8.2 Add low memory protection for ESP32
     - Monitor ESP32 memory usage
     - Reject requests when memory is low
     - Play memory error message
     - _Requirements: 11.4_
   
-  - [ ] 8.3 Write property test for concurrent request limitation
+  - [x] 8.3 Write property test for concurrent request limitation
     - **Property 19: Concurrent request limitation**
     - **Validates: Requirements 11.3**
   
-  - [ ] 8.4 Write property test for low memory protection
+  - [x] 8.4 Write property test for low memory protection
     - **Property 20: Low memory protection**
     - **Validates: Requirements 11.4**
 
-- [ ] 9. Integrate components with existing system
-  - [ ] 9.1 Wire Question_Trigger_Engine to Event_Bus
+- [x] 9. Integrate components with existing system
+  - [x] 9.1 Wire Question_Trigger_Engine to Event_Bus
     - Subscribe to ASR transcription events
     - Verify trigger detection triggers image capture
     - Test end-to-end flow: transcription → trigger → capture
     - _Requirements: 10.3_
   
-  - [ ] 9.2 Wire TTS_Adapter to Event_Bus
+  - [x] 9.2 Wire TTS_Adapter to Event_Bus
     - Subscribe to vision response events
     - Verify TTS conversion produces audio
     - Test end-to-end flow: vision response → TTS → audio ready
     - _Requirements: 10.1_
   
-  - [ ] 9.3 Wire Audio_Playback_Coordinator to WebSocket_Gateway
+  - [x] 9.3 Wire Audio_Playback_Coordinator to WebSocket_Gateway
     - Subscribe to audio-ready events
     - Verify audio streaming to ESP32
     - Test end-to-end flow: audio ready → stream → playback
     - _Requirements: 10.2_
   
-  - [ ] 9.4 Modify Vision_Adapter to accept question context
+  - [x] 9.4 Modify Vision_Adapter to accept question context
     - Update Vision_Adapter to receive question text
     - Pass question to Qwen-Omni-Flash as prompt context
     - Verify vision responses include question context
     - _Requirements: 4.1_
   
-  - [ ] 9.5 Write property test for image-question association
+  - [x] 9.5 Write property test for image-question association
     - **Property 5: Image-question association**
     - **Validates: Requirements 3.4**
   
-  - [ ] 9.6 Write property test for vision request completeness
+  - [x] 9.6 Write property test for vision request completeness
     - **Property 7: Vision request completeness**
     - **Validates: Requirements 4.1, 4.3**
 
-- [ ] 10. Checkpoint - Test integrated system
+- [x] 10. Checkpoint - Test integrated system
   - Ensure all integration tests pass
   - Verify end-to-end flow: question → capture → vision → TTS → playback
   - Test error scenarios and recovery
   - Test concurrent request handling
   - Ask the user if questions arise
 
-- [ ] 11. Implement network resilience
-  - [ ] 11.1 Add audio buffering for network interruptions
+- [x] 11. Implement network resilience
+  - [x] 11.1 Add audio buffering for network interruptions
     - Implement local audio buffering on ESP32
     - Resume streaming after network restoration
     - _Requirements: 1.3_
   
-  - [ ] 11.2 Add WebSocket reconnection logic
+  - [x] 11.2 Add WebSocket reconnection logic
     - Implement automatic reconnection with exponential backoff
     - Play network error message on disconnection
     - Resume operation after reconnection
     - _Requirements: 8.6_
   
-  - [ ] 11.3 Write property test for network resilience with buffering
+  - [x] 11.3 Write property test for network resilience with buffering
     - **Property 2: Network resilience with buffering**
     - **Validates: Requirements 1.3**
 
-- [ ] 12. Add configuration and customization support
-  - [ ] 12.1 Create configuration file structure
+- [x] 12. Add configuration and customization support
+  - [x] 12.1 Create configuration file structure
     - Define configuration schema for all components
     - Add configuration loading and validation
     - Support environment variable overrides
     - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5_
   
-  - [ ] 12.2 Implement pluggable TTS backend support
+  - [x] 12.2 Implement pluggable TTS backend support
     - Create TTS backend interface
     - Implement Qwen TTS backend
     - Support custom TTS backend registration
     - _Requirements: 12.5_
   
-  - [ ] 12.3 Write unit tests for configuration loading
+  - [x] 12.3 Write unit tests for configuration loading
     - Test TTS voice parameter configuration
     - Test audio format configuration
     - Test trigger phrase configuration from file
@@ -262,36 +262,36 @@ This implementation plan extends the existing "esp32-asr-capture-vision-mvp" sys
     - Test pluggable TTS backend
     - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5_
 
-- [ ] 13. End-to-end integration testing
-  - [ ] 13.1 Write integration test for happy path
+- [x] 13. End-to-end integration testing
+  - [x] 13.1 Write integration test for happy path
     - Test: User asks question → receives spoken response
     - Verify all components work together
     - Verify response time is within acceptable range
     - _Requirements: 1.1, 2.1, 3.1, 4.1, 5.1, 6.1_
   
-  - [ ] 13.2 Write integration test for network interruption recovery
+  - [x] 13.2 Write integration test for network interruption recovery
     - Test: Connection lost during audio streaming → recovery
     - Verify buffering and resume behavior
     - _Requirements: 1.3, 6.4, 8.6_
   
-  - [ ] 13.3 Write integration test for concurrent request handling
+  - [x] 13.3 Write integration test for concurrent request handling
     - Test: Multiple questions in quick succession → cooldown enforcement
     - Verify only first request is processed
     - _Requirements: 2.4, 11.3_
   
-  - [ ] 13.4 Write integration test for error recovery
+  - [x] 13.4 Write integration test for error recovery
     - Test: Component failure → error message → system recovery
     - Verify error messages are spoken
     - Verify system recovers and accepts new requests
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
   
-  - [ ] 13.5 Write integration test for low memory scenario
+  - [x] 13.5 Write integration test for low memory scenario
     - Test: ESP32 low memory → request rejection → memory cleanup
     - Verify memory error message is played
     - Verify system recovers after memory cleanup
     - _Requirements: 11.2, 11.4_
 
-- [ ] 14. Final checkpoint and documentation
+- [x] 14. Final checkpoint and documentation
   - Ensure all tests pass (unit, property, integration)
   - Verify system meets performance targets (<10 seconds end-to-end)
   - Update API documentation with new endpoints and events
