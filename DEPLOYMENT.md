@@ -1,6 +1,17 @@
-# ESP32 ASR Capture Vision MVP - 部署指南
+# ESP32 ASR Capture Vision MVP + Real-Time AI Assistant - 部署指南
 
 ## AWS EC2 快速部署
+
+### 選擇作業系統
+
+本指南支援以下 AWS EC2 作業系統：
+- **Amazon Linux 2** (推薦 - AWS 優化)
+- **Amazon Linux 2023** (最新版本)
+- **Ubuntu 20.04/22.04 LTS** (社群支援廣泛)
+
+---
+
+## 部署選項 A：Amazon Linux 2 (推薦)
 
 ### 1. 準備 EC2 實例
 
@@ -17,6 +28,56 @@ sudo yum install python3 python3-pip git -y
 # 安裝系統依賴
 sudo yum install gcc python3-devel -y
 ```
+
+---
+
+## 部署選項 B：Amazon Linux 2023
+
+### 1. 準備 EC2 實例
+
+```bash
+# 連線到 EC2
+ssh -i your-key.pem ec2-user@your-ec2-public-ip
+
+# 更新系統
+sudo dnf update -y
+
+# 安裝 Python 3.11+ (AL2023 預設)
+sudo dnf install python3 python3-pip git -y
+
+# 安裝系統依賴
+sudo dnf install gcc python3-devel -y
+
+# 驗證 Python 版本
+python3 --version  # 應該是 3.11 或更高
+```
+
+---
+
+## 部署選項 C：Ubuntu 20.04/22.04 LTS
+
+### 1. 準備 EC2 實例
+
+```bash
+# 連線到 EC2
+ssh -i your-key.pem ubuntu@your-ec2-public-ip
+
+# 更新系統
+sudo apt update && sudo apt upgrade -y
+
+# 安裝 Python 3.9+
+sudo apt install python3 python3-pip python3-venv git -y
+
+# 安裝系統依賴
+sudo apt install gcc python3-dev -y
+
+# 驗證 Python 版本
+python3 --version  # 應該是 3.8 或更高
+```
+
+---
+
+## 通用部署步驟（所有作業系統）
 
 ### 2. 部署後端
 
@@ -52,8 +113,30 @@ ASR_ENDPOINT=wss://dashscope.aliyuncs.com/api/v1/services/audio/asr
 
 # Vision Model
 VISION_API_KEY=your_vision_api_key_here
-VISION_MODEL=qwen-vl-plus
+VISION_MODEL=qwen-vl-max
 VISION_ENDPOINT=https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
+VISION_TIMEOUT=8
+
+# TTS Configuration
+TTS_API_KEY=your_tts_api_key_here
+TTS_ENDPOINT=wss://dashscope.aliyuncs.com/api/v1/services/audio/tts
+TTS_VOICE=zhifeng_emo
+TTS_LANGUAGE=zh-CN
+TTS_SPEED=1.0
+TTS_PITCH=1.0
+TTS_AUDIO_FORMAT=pcm
+TTS_SAMPLE_RATE=16000
+TTS_TIMEOUT_SECONDS=5.0
+
+# Trigger Configuration
+TRIGGER_ENGLISH_PHRASES=describe the view,what do I see,what's in front of me,tell me what you see
+TRIGGER_CHINESE_PHRASES=描述一下景象,我看到什麼,前面是什麼,告訴我你看到什麼
+TRIGGER_FUZZY_THRESHOLD=0.85
+
+# Audio Playback Configuration
+AUDIO_CHUNK_SIZE=4096
+AUDIO_BUFFER_SIZE=16384
+AUDIO_STREAM_TIMEOUT=10.0
 
 # Server Configuration
 SERVER_HOST=0.0.0.0
@@ -64,7 +147,8 @@ LOG_LEVEL=INFO
 MAX_CONCURRENT_REQUESTS=1
 COOLDOWN_SECONDS=3
 CAPTURE_TIMEOUT_SECONDS=5
-VISION_TIMEOUT_SECONDS=15
+VISION_TIMEOUT_SECONDS=8
+TTS_TIMEOUT_SECONDS=5
 EVENT_BUFFER_SIZE=100
 
 # AWS EC2
@@ -110,19 +194,41 @@ pkill -f "python main.py"
 sudo nano /etc/systemd/system/esp32-asr.service
 ```
 
-內容：
+內容（根據作業系統選擇）：
+
+**Amazon Linux 2/2023:**
 
 ```ini
 [Unit]
-Description=ESP32 ASR Capture Vision MVP
+Description=ESP32 ASR Capture Vision MVP + Real-Time AI Assistant
 After=network.target
 
 [Service]
 Type=simple
 User=ec2-user
-WorkingDirectory=/home/ec2-user/esp32-asr-capture-vision-mvp/backend
-Environment="PATH=/home/ec2-user/esp32-asr-capture-vision-mvp/backend/venv/bin"
-ExecStart=/home/ec2-user/esp32-asr-capture-vision-mvp/backend/venv/bin/python main.py
+WorkingDirectory=/home/ec2-user/EE3070-Design-Project/backend
+Environment="PATH=/home/ec2-user/EE3070-Design-Project/backend/venv/bin"
+ExecStart=/home/ec2-user/EE3070-Design-Project/backend/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Ubuntu 20.04/22.04:**
+
+```ini
+[Unit]
+Description=ESP32 ASR Capture Vision MVP + Real-Time AI Assistant
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/EE3070-Design-Project/backend
+Environment="PATH=/home/ubuntu/EE3070-Design-Project/backend/venv/bin"
+ExecStart=/home/ubuntu/EE3070-Design-Project/backend/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=10
 

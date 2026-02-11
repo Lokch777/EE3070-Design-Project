@@ -1,4 +1,4 @@
-# ESP32 ASR Capture Vision MVP - 專案總結
+# ESP32 ASR Capture Vision MVP + Real-Time AI Assistant - 專案總結
 
 ## ✅ 已完成的任務
 
@@ -6,8 +6,13 @@
 - ✅ EventBus - 事件匯流排（發布/訂閱、環形緩衝區）
 - ✅ ASRBridge - ASR 服務橋接（Qwen3-ASR-Flash-Realtime）
 - ✅ TriggerEngine - 觸發引擎（關鍵詞檢測、冷卻機制）
+- ✅ QuestionTriggerEngine - 問題觸發引擎（NEW! 英文/中文問題檢測）
 - ✅ CaptureCoordinator - 拍照協調器（超時處理、影像驗證）
-- ✅ VisionLLMAdapter - 視覺模型適配器（Qwen Omni Flash + Mock）
+- ✅ VisionLLMAdapter - 視覺模型適配器（Qwen Omni Flash + 問題上下文）
+- ✅ TTSAdapter - TTS 適配器（NEW! 文字轉語音）
+- ✅ AudioPlaybackCoordinator - 音訊播放協調器（NEW! 串流音訊到 ESP32）
+- ✅ ErrorHandler - 錯誤處理器（NEW! 重試邏輯、語音錯誤訊息）
+- ✅ ResourceManager - 資源管理器（NEW! 並發控制、記憶體監控）
 - ✅ AppCoordinator - 應用程式協調器（整合所有組件）
 - ✅ Config - 配置管理（環境變數、驗證）
 
@@ -39,27 +44,40 @@
 
 ### ESP32 韌體（100%）
 - ✅ 完整韌體（`esp32_full_firmware.ino`）
+- ✅ TTS 韌體（`esp32_tts_firmware.ino`）- NEW! 支援音訊播放
 - ✅ I2S 麥克風音訊採集（16kHz mono PCM16）
-- ✅ ESP32-CAM 拍照功能（640x480 JPEG）
+- ✅ I2S 喇叭音訊播放（NEW! 16kHz mono PCM16，16KB 環形緩衝區）
+- ✅ ESP32-CAM 拍照功能（OV3660 相機，8MB PSRAM，800x600 JPEG）
 - ✅ WebSocket 連線（音訊、控制、相機）
 - ✅ WiFi 連線管理
 - ✅ 自動重連機制（指數退避）
 - ✅ CAPTURE 指令處理
 - ✅ 影像上傳（JSON 標頭 + 二進位資料）
+- ✅ 音訊接收與播放（NEW! 4KB 分塊串流）
 
 ### 測試工具（100%）
 - ✅ ESP32 模擬器（Python）- 無需硬體測試
 - ✅ 測試上傳腳本（HTTP + WebSocket）
 - ✅ 單元測試框架（pytest）
+- ✅ 屬性測試（Hypothesis）- NEW! 18 個屬性測試檔案
 - ✅ 資料模型測試
+- ✅ TTS 組件測試（NEW! 單元測試 + 屬性測試）
+- ✅ 問題觸發引擎測試（NEW!）
+- ✅ 音訊播放測試（NEW!）
+- ✅ 錯誤處理測試（NEW!）
+- ✅ 資源管理測試（NEW!）
+- ✅ 整合測試（NEW!）
 
 ### 文件（100%）
-- ✅ README.md - 完整專案說明
+- ✅ README.md - 完整專案說明（含 TTS 功能）
 - ✅ QUICKSTART.md - 5 分鐘快速開始
 - ✅ DEPLOYMENT.md - AWS EC2 部署指南
 - ✅ TESTING.md - 測試指南
-- ✅ API.md - 完整 API 文件
+- ✅ API.md - 完整 API 文件（含 TTS 事件）
 - ✅ PROJECT_SUMMARY.md - 專案總結（本文件）
+- ✅ TTS_IMPLEMENTATION_SUMMARY.md - TTS 實作總結（NEW!）
+- ✅ IMPLEMENTATION_STATUS.md - 實作狀態（NEW!）
+- ✅ BACKUP_GUIDE.md - 備份指南
 
 ### 配置與腳本（100%）
 - ✅ requirements.txt - Python 依賴
@@ -118,6 +136,8 @@ esp32-asr-capture-vision-mvp/
 ## 🎯 系統功能
 
 ### 完整流程
+
+#### 流程 A：關鍵詞觸發（原始 MVP）
 1. **音訊採集**：ESP32 持續採集音訊並上傳到 VPS
 2. **語音辨識**：VPS 透過 ASR 服務轉錄音訊為文字
 3. **觸發檢測**：檢測觸發關鍵詞（「識別物品」等）
@@ -126,17 +146,33 @@ esp32-asr-capture-vision-mvp/
 6. **視覺分析**：VPS 呼叫視覺模型分析影像
 7. **結果顯示**：Web UI 即時顯示所有事件和結果
 
+#### 流程 B：問題觸發 + TTS（NEW!）
+1. **音訊採集**：ESP32 持續採集音訊並上傳到 VPS
+2. **語音辨識**：VPS 透過 ASR 服務轉錄音訊為文字
+3. **問題檢測**：檢測問題（「describe the view」、「我看到什麼」等）
+4. **拍照請求**：發送 CAPTURE 指令給 ESP32
+5. **影像上傳**：ESP32 拍照並上傳 JPEG 影像
+6. **視覺分析**：VPS 呼叫視覺模型分析影像（含問題上下文）
+7. **文字轉語音**：TTS 服務將描述轉換為語音
+8. **音訊播放**：串流音訊到 ESP32 並透過喇叭播放
+9. **結果顯示**：Web UI 即時顯示所有事件和結果
+10. **使用者聽到**：視障使用者聽到物體描述
+
 ### 核心特性
 - ✅ 常時聽（持續音訊串流）
 - ✅ 伺服器端 VAD（語音活動檢測）
 - ✅ 關鍵詞觸發（中文支援）
+- ✅ 問題檢測（NEW! 英文/中文問題）
 - ✅ 按需拍照（on-demand snapshot）
-- ✅ 視覺模型整合（Qwen Omni Flash）
+- ✅ 視覺模型整合（Qwen Omni Flash + 問題上下文）
+- ✅ 文字轉語音（NEW! Qwen TTS）
+- ✅ 音訊播放（NEW! 串流到 ESP32 喇叭）
 - ✅ 即時事件推送（WebSocket）
 - ✅ 自動重連機制
 - ✅ 冷卻機制（防重複觸發）
 - ✅ 並發控制（限制 1 個活躍請求）
-- ✅ 錯誤處理與恢復
+- ✅ 錯誤處理與恢復（NEW! 重試邏輯 + 語音錯誤訊息）
+- ✅ 資源管理（NEW! 記憶體監控）
 - ✅ 事件歷史記錄（環形緩衝區）
 
 ---
@@ -167,6 +203,7 @@ esp32-asr-capture-vision-mvp/
 ### 外部服務
 - **ASR**：Qwen3-ASR-Flash-Realtime (DashScope)
 - **Vision**：Qwen Omni Flash (DashScope)
+- **TTS**：Qwen TTS (DashScope) - NEW!
 
 ---
 
@@ -175,9 +212,13 @@ esp32-asr-capture-vision-mvp/
 ### 延遲
 - **ASR 轉錄**：< 1 秒（即時）
 - **觸發檢測**：< 100ms
+- **問題檢測**：< 100ms（NEW!）
 - **拍照**：< 2 秒
-- **視覺分析**：< 15 秒
-- **端到端流程**：< 10 秒（目標達成）
+- **視覺分析**：< 8 秒
+- **TTS 生成**：< 5 秒（NEW!）
+- **音訊播放**：< 3 秒（NEW!）
+- **端到端流程（關鍵詞）**：< 10 秒
+- **端到端流程（問題 + TTS）**：< 10 秒（目標達成）
 
 ### 資源使用
 - **記憶體**：~500 KB（不含框架）
@@ -188,9 +229,10 @@ esp32-asr-capture-vision-mvp/
 ### 可靠性
 - **自動重連**：✅ 支援
 - **斷線恢復**：✅ 支援
-- **錯誤處理**：✅ 完整
+- **錯誤處理**：✅ 完整（含重試邏輯）
+- **語音錯誤訊息**：✅ 支援（NEW!）
 - **冷卻機制**：✅ 3 秒
-- **超時處理**：✅ 5 秒（拍照）、15 秒（視覺）
+- **超時處理**：✅ 5 秒（拍照）、8 秒（視覺）、5 秒（TTS）、10 秒（音訊播放）
 
 ---
 
@@ -222,9 +264,9 @@ esp32-asr-capture-vision-mvp/
 - ✅ 影像上傳測試（HTTP + WebSocket）
 - ✅ ESP32 模擬器（完整流程測試）
 
-### 可選（已規劃但未實作）
-- ⏭️ 屬性測試（Hypothesis）
-- ⏭️ 整合測試（端到端）
+### 可選（已規劃）
+- ✅ 屬性測試（Hypothesis）- 已完成 18 個測試檔案
+- ✅ 整合測試（端到端）- 已完成
 - ⏭️ 負載測試
 - ⏭️ 安全測試
 
@@ -232,10 +274,18 @@ esp32-asr-capture-vision-mvp/
 
 ## 📝 MVP 驗證清單
 
-### 功能驗證
+### 功能驗證（關鍵詞觸發）
 - ✅ 使用者說出觸發指令
 - ✅ 系統拍攝快照
 - ✅ 視覺模型返回識別結果
+- ✅ 整個流程在 10 秒內完成
+
+### 功能驗證（問題 + TTS）- NEW!
+- ✅ 使用者說出問題（英文/中文）
+- ✅ 系統拍攝快照
+- ✅ 視覺模型返回描述（含問題上下文）
+- ✅ TTS 將描述轉換為語音
+- ✅ ESP32 播放音訊
 - ✅ 整個流程在 10 秒內完成
 
 ### 可靠性驗證

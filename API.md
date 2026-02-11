@@ -1,4 +1,4 @@
-# ESP32 ASR Capture Vision MVP - API 文件
+# ESP32 ASR Capture Vision MVP + Real-Time AI Assistant - API 文件
 
 ## WebSocket 端點
 
@@ -204,6 +204,73 @@ async with websockets.connect("ws://server:8000/ws_camera") as ws:
 }
 ```
 
+#### `question_detected` - 問題檢測（NEW!）
+```json
+{
+  "event_type": "question_detected",
+  "timestamp": 1234567890.123,
+  "req_id": "uuid-string",
+  "data": {
+    "question_text": "describe the view",
+    "matched_phrase": "describe the view",
+    "language": "en"
+  }
+}
+```
+
+#### `tts_started` - TTS 開始（NEW!）
+```json
+{
+  "event_type": "tts_started",
+  "timestamp": 1234567890.123,
+  "req_id": "uuid-string",
+  "data": {
+    "text": "這是一個紅色的蘋果",
+    "voice": "zhifeng_emo"
+  }
+}
+```
+
+#### `audio_ready` - 音訊就緒（NEW!）
+```json
+{
+  "event_type": "audio_ready",
+  "timestamp": 1234567890.123,
+  "req_id": "uuid-string",
+  "data": {
+    "audio_size": 32000,
+    "duration_seconds": 2.0,
+    "format": "pcm16"
+  }
+}
+```
+
+#### `audio_playback_started` - 音訊播放開始（NEW!）
+```json
+{
+  "event_type": "audio_playback_started",
+  "timestamp": 1234567890.123,
+  "req_id": "uuid-string",
+  "data": {
+    "chunk_size": 4096,
+    "total_chunks": 8
+  }
+}
+```
+
+#### `audio_playback_complete` - 音訊播放完成（NEW!）
+```json
+{
+  "event_type": "audio_playback_complete",
+  "timestamp": 1234567890.123,
+  "req_id": "uuid-string",
+  "data": {
+    "chunks_sent": 8,
+    "duration_seconds": 2.0
+  }
+}
+```
+
 #### `error` - 錯誤事件
 ```json
 {
@@ -359,9 +426,18 @@ curl -X POST http://server:8000/api/upload_image \
 
 | 錯誤類型 | 說明 |
 |---------|------|
-| `vision_timeout` | 視覺模型超時（15 秒） |
+| `vision_timeout` | 視覺模型超時（8 秒） |
 | `vision_api_error` | 視覺模型 API 錯誤 |
 | `vision_auth_failed` | 視覺模型認證失敗 |
+
+### TTS 錯誤（NEW!）
+
+| 錯誤類型 | 說明 |
+|---------|------|
+| `tts_timeout` | TTS 超時（5 秒） |
+| `tts_connection_failed` | TTS 服務連線失敗 |
+| `tts_api_error` | TTS API 錯誤 |
+| `audio_playback_failed` | 音訊播放失敗 |
 
 ---
 
@@ -375,7 +451,9 @@ curl -X POST http://server:8000/api/upload_image \
 - **冷卻時間**：觸發後 3 秒冷卻期
 - **超時設定**：
   - 拍照超時：5 秒
-  - 視覺模型超時：15 秒
+  - 視覺模型超時：8 秒
+  - TTS 超時：5 秒
+  - 音訊播放超時：10 秒
   - WebSocket 心跳：30 秒 ping，60 秒超時
 
 ---

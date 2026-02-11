@@ -1,15 +1,14 @@
-# 🎙️ ESP32 ASR Capture Vision MVP
+# 🎙️ ESP32 ASR Capture Vision MVP + Real-Time AI Assistant
 
 <div align="center">
 
 ![ESP32](https://img.shields.io/badge/ESP32-CAM-blue?style=for-the-badge&logo=espressif)
 ![Python](https://img.shields.io/badge/Python-3.8+-green?style=for-the-badge&logo=python)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-teal?style=for-the-badge&logo=fastapi)
-![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
 
-**Voice-Controlled Object Recognition System**
+**Voice-Controlled Object Recognition System with Text-to-Speech**
 
-A real-time IoT system that uses ESP32 devices for continuous audio capture, triggers image capture via ASR (Automatic Speech Recognition), and performs object identification using vision AI models.
+A real-time IoT system that uses ESP32 devices for continuous audio capture, triggers image capture via ASR (Automatic Speech Recognition), performs object identification using vision AI models, and provides spoken responses through text-to-speech for visually impaired users.
 
 [Features](#-features) • [Quick Start](#-quick-start) • [Architecture](#-system-architecture) • [Deployment](#-aws-ec2-deployment) • [Documentation](#-documentation)
 
@@ -21,22 +20,23 @@ A real-time IoT system that uses ESP32 devices for continuous audio capture, tri
 
 ### Objectives
 
-This project implements an **always-listening voice-controlled object recognition system** designed for wearable devices (smart glasses) or IoT applications. The system enables hands-free interaction where users can simply speak trigger phrases to capture and identify objects in their environment.
+This project implements an **always-listening voice-controlled object recognition system with audio feedback** designed for wearable devices (smart glasses) or IoT applications. The system enables hands-free interaction where users can simply speak questions to capture and hear descriptions of objects in their environment.
 
 **Primary Goals:**
 
 1. **Continuous Voice Monitoring**: Enable 24/7 audio streaming from ESP32 devices with real-time speech-to-text transcription
 2. **Voice-Activated Capture**: Trigger image capture through natural Chinese voice commands without manual button presses
 3. **AI-Powered Recognition**: Leverage state-of-the-art vision models to identify and describe objects in captured images
-4. **Real-Time Feedback**: Provide instant visual feedback through a web dashboard showing transcriptions, images, and AI responses
-5. **Robust Connectivity**: Ensure reliable operation with automatic reconnection and error recovery mechanisms
-6. **Security First**: Protect API credentials by keeping them exclusively on the backend server
+4. **Spoken Responses**: Convert AI descriptions to speech and play through ESP32 speaker for visually impaired users
+5. **Real-Time Feedback**: Provide instant visual feedback through a web dashboard showing transcriptions, images, and AI responses
+6. **Robust Connectivity**: Ensure reliable operation with automatic reconnection and error recovery mechanisms
+7. **Security First**: Protect API credentials by keeping them exclusively on the backend server
 
 **Target Use Cases:**
 
-- 🕶️ **Smart Glasses**: Assistive technology for visually impaired users to identify objects
+- 🕶️ **Smart Glasses for Visually Impaired**: Assistive technology to identify objects through voice questions and hear spoken descriptions
 - 🏭 **Industrial IoT**: Hands-free equipment inspection and inventory management
-- 🏥 **Healthcare**: Medical device identification and medication verification
+- 🏥 **Healthcare**: Medical device identification and medication verification with audio feedback
 - 🎓 **Education**: Interactive learning tools for object recognition
 - 🏠 **Smart Home**: Voice-controlled home automation and object tracking
 
@@ -54,6 +54,7 @@ The system follows an **event-driven architecture** with clear separation of con
 │ 4. Real-Time       │ WebSocket-based low-latency comms      │
 │ 5. Security        │ Zero-trust: API keys only on backend   │
 │ 6. Testability     │ Property-based testing for correctness │
+│ 7. Accessibility   │ Audio feedback for visually impaired   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -61,11 +62,12 @@ The system follows an **event-driven architecture** with clear separation of con
 
 - **WebSocket Communication**: Chosen for bidirectional real-time data streaming (audio, control commands, images, events)
 - **Event Bus Pattern**: Decouples components and enables flexible event routing and history tracking
-- **State Machine**: Ensures predictable behavior through well-defined states (LISTENING → TRIGGERED → CAPTURING → ANALYZING → DONE)
+- **State Machine**: Ensures predictable behavior through well-defined states (LISTENING → TRIGGERED → CAPTURING → ANALYZING → TTS → PLAYBACK → DONE)
 - **Request Correlation**: Unique `req_id` tracks each trigger-to-result flow across all components
 - **Cooldown Mechanism**: 3-second cooldown prevents duplicate triggers from rapid speech
-- **Timeout Protection**: Configurable timeouts (5s capture, 15s vision) prevent indefinite waiting
+- **Timeout Protection**: Configurable timeouts (5s capture, 8s vision, 5s TTS) prevent indefinite waiting
 - **Ring Buffer**: Memory-efficient event history (last 100 events) for debugging and UI display
+- **Audio Buffering**: 16KB ring buffer on ESP32 for smooth audio playback
 
 ### System Workflow
 
@@ -79,25 +81,37 @@ The system follows an **event-driven architecture** with clear separation of con
        └─> Backend forwards to Qwen3-ASR service
            └─> ASR returns real-time transcription
 
-2. 🎯 TRIGGER DETECTION
-   └─> Trigger Engine monitors ASR final text
-       └─> Detects keywords: "識別物品", "認下呢個係咩", etc.
+2. 🎯 QUESTION DETECTION (NEW!)
+   └─> Question Trigger Engine monitors ASR final text
+       └─> Detects questions: "describe the view", "what do I see", etc.
            └─> Generates unique req_id
-               └─> Broadcasts trigger_fired event
+               └─> Broadcasts question_detected event
 
 3. 📸 IMAGE CAPTURE
    └─> Backend sends CAPTURE command to ESP32
-       └─> ESP32 captures JPEG (max 640x480, 200KB)
+       └─> ESP32 captures JPEG (max 800x600 with 8MB PSRAM, 200KB)
            └─> Uploads image with req_id
                └─> Backend validates and stores
 
 4. 🤖 AI ANALYSIS
    └─> Backend calls Qwen Omni Flash vision model
-       └─> Sends: JPEG + trigger text prompt
+       └─> Sends: JPEG + user's question as context
            └─> Receives: Object description text
                └─> Broadcasts vision_result event
 
-5. 🌐 UI UPDATE
+5. 🔊 TEXT-TO-SPEECH (NEW!)
+   └─> TTS Adapter converts description to speech
+       └─> Uses Qwen TTS service (Chinese language)
+           └─> Generates PCM16 audio at 16kHz
+               └─> Broadcasts audio_ready event
+
+6. 📢 AUDIO PLAYBACK (NEW!)
+   └─> Audio Playback Coordinator streams audio to ESP32
+       └─> Sends 4KB chunks via WebSocket
+           └─> ESP32 buffers and plays through I2S speaker
+               └─> User hears the description
+
+7. 🌐 UI UPDATE
    └─> Web UI receives all events via WebSocket
        └─> Displays: Transcription → Trigger → Image → AI Result
            └─> User sees complete flow in <10 seconds
@@ -112,15 +126,18 @@ The system follows an **event-driven architecture** with clear separation of con
 
 | Component | Specification | Rationale |
 |-----------|--------------|-----------|
+| **Hardware** | ESP32-CAM with OV3660 camera, 8MB PSRAM | High-quality image capture with sufficient memory buffer |
 | **Audio Format** | PCM16, 16kHz, Mono | Standard format for ASR, balances quality and bandwidth |
-| **Image Format** | JPEG, max 640x480, <200KB | Sufficient for object recognition, fast transmission |
-| **Trigger Keywords** | 4 Chinese phrases | Natural language commands for Chinese users |
+| **Image Format** | JPEG, max 800x600, <200KB | Sufficient for object recognition, fast transmission |
+| **Trigger Keywords** | 4 Chinese phrases + 4 English questions | Natural language commands for diverse users |
 | **Cooldown Period** | 3 seconds | Prevents accidental double-triggers from speech patterns |
 | **Capture Timeout** | 5 seconds | Reasonable time for ESP32 to capture and upload |
-| **Vision Timeout** | 15 seconds | Accounts for API latency and processing time |
+| **Vision Timeout** | 8 seconds | Accounts for API latency and processing time |
+| **TTS Timeout** | 5 seconds | Quick audio generation for responsive feedback |
 | **Event Buffer** | 100 events (ring buffer) | Balances memory usage and debugging capability |
+| **Audio Buffer** | 16KB ring buffer on ESP32 | Smooth audio playback without stuttering |
 | **Concurrent Requests** | 1 (MVP) | Simplifies state management, expandable later |
-| **Target Latency** | <10 seconds end-to-end | From trigger speech to AI result display |
+| **Target Latency** | <10 seconds end-to-end | From trigger speech to audio playback completion |
 
 ### Architecture Highlights
 
@@ -159,12 +176,18 @@ The system follows an **event-driven architecture** with clear separation of con
 
 - **🎤 Continuous Audio Streaming**: ESP32 captures audio via I2S microphone and streams to backend
 - **🗣️ Voice-Activated Triggers**: ASR detects Chinese trigger phrases to initiate image capture
-- **📸 On-Demand Image Capture**: ESP32-CAM captures JPEG images only when triggered
-- **🤖 AI-Powered Vision**: Qwen Omni Flash vision model identifies objects in captured images
+- **❓ Question Detection**: NEW! Detects voice questions like "describe the view", "what do I see" (English & Chinese)
+- **📸 On-Demand Image Capture**: ESP32-CAM captures JPEG images only when triggered (OV3660 camera, 8MB PSRAM)
+- **🤖 AI-Powered Vision**: Qwen Omni Flash vision model identifies objects in captured images with question context
+- **🔊 Text-to-Speech**: NEW! Converts AI descriptions to natural Chinese speech using Qwen TTS
+- **📢 Audio Playback**: NEW! Streams audio back to ESP32 and plays through I2S speaker for visually impaired users
 - **🌐 Real-Time Web UI**: Live dashboard showing ASR transcripts, images, and AI responses
 - **🔄 Auto-Reconnection**: Robust WebSocket connections with automatic recovery
 - **🔒 Secure API Management**: All API keys stored securely on backend server
 - **☁️ Cloud-Ready**: Designed for AWS EC2 deployment with easy scaling
+- **⚡ Low Latency**: Complete flow in <10 seconds (target: <5 seconds)
+- **🛡️ Error Recovery**: Comprehensive error handling with retry logic and spoken error messages
+- **🎯 Resource Management**: Concurrent request control and memory monitoring
 
 ---
 
@@ -278,7 +301,28 @@ ASR_SAMPLE_RATE=16000
 
 # Vision Configuration
 VISION_MODEL=qwen-vl-max
-VISION_TIMEOUT=15
+VISION_TIMEOUT=8
+
+# TTS Configuration (NEW!)
+TTS_API_KEY=your_tts_api_key_here
+TTS_ENDPOINT=wss://dashscope.aliyuncs.com/api/v1/services/audio/tts
+TTS_VOICE=zhifeng_emo
+TTS_LANGUAGE=zh-CN
+TTS_SPEED=1.0
+TTS_PITCH=1.0
+TTS_AUDIO_FORMAT=pcm
+TTS_SAMPLE_RATE=16000
+TTS_TIMEOUT_SECONDS=5.0
+
+# Trigger Configuration (NEW!)
+TRIGGER_ENGLISH_PHRASES=describe the view,what do I see,what's in front of me,tell me what you see
+TRIGGER_CHINESE_PHRASES=描述一下景象,我看到什麼,前面是什麼,告訴我你看到什麼
+TRIGGER_FUZZY_THRESHOLD=0.85
+
+# Audio Playback Configuration (NEW!)
+AUDIO_CHUNK_SIZE=4096
+AUDIO_BUFFER_SIZE=16384
+AUDIO_STREAM_TIMEOUT=10.0
 ```
 
 ### 3️⃣ Start Backend Server
@@ -322,7 +366,10 @@ Flash the firmware to your ESP32 device using Arduino IDE.
 
 ### Step 1: Launch EC2 Instance
 
-1. **Choose AMI**: Ubuntu Server 20.04 LTS or 22.04 LTS
+1. **Choose AMI**: 
+   - Amazon Linux 2 (recommended - AWS optimized)
+   - Amazon Linux 2023 (latest version)
+   - Ubuntu Server 20.04 LTS or 22.04 LTS
 2. **Instance Type**: t2.micro (free tier) or t2.small (recommended)
 3. **Storage**: 8GB minimum, 16GB recommended
 4. **Key Pair**: Create or use existing SSH key pair
@@ -346,6 +393,8 @@ ssh -i your-key.pem ubuntu@your-ec2-public-ip
 
 ### Step 4: Install Dependencies (Ubuntu)
 
+**For Ubuntu 20.04/22.04:**
+
 ```bash
 # Update system packages
 sudo apt update && sudo apt upgrade -y
@@ -358,6 +407,38 @@ sudo apt install htop curl wget -y
 
 # Verify Python version
 python3 --version  # Should be 3.8 or higher
+```
+
+**For Amazon Linux 2:**
+
+```bash
+# Update system packages
+sudo yum update -y
+
+# Install Python 3.9+ and pip
+sudo yum install python3 python3-pip git -y
+
+# Install additional tools
+sudo yum install htop curl wget gcc python3-devel -y
+
+# Verify Python version
+python3 --version  # Should be 3.7 or higher
+```
+
+**For Amazon Linux 2023:**
+
+```bash
+# Update system packages
+sudo dnf update -y
+
+# Install Python 3.11+ and pip (pre-installed)
+sudo dnf install python3 python3-pip git -y
+
+# Install additional tools
+sudo dnf install htop curl wget gcc python3-devel -y
+
+# Verify Python version
+python3 --version  # Should be 3.11 or higher
 ```
 
 ### Step 5: Deploy Application
@@ -405,7 +486,9 @@ Create a systemd service file:
 sudo nano /etc/systemd/system/esp32-asr.service
 ```
 
-Add the following content:
+Add the following content (adjust paths based on your OS):
+
+**For Ubuntu:**
 
 ```ini
 [Unit]
@@ -418,6 +501,26 @@ User=ubuntu
 WorkingDirectory=/home/ubuntu/EE3070-Design-Project/backend
 Environment="PATH=/home/ubuntu/EE3070-Design-Project/backend/venv/bin"
 ExecStart=/home/ubuntu/EE3070-Design-Project/backend/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**For Amazon Linux 2/2023:**
+
+```ini
+[Unit]
+Description=ESP32 ASR Capture Vision Backend
+After=network.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/EE3070-Design-Project/backend
+Environment="PATH=/home/ec2-user/EE3070-Design-Project/backend/venv/bin"
+ExecStart=/home/ec2-user/EE3070-Design-Project/backend/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=10
 
@@ -614,9 +717,11 @@ EE3070-Design-Project/
 
 ---
 
-## 🎯 Trigger Keywords
+## 🎯 Trigger Keywords & Questions
 
-The system recognizes the following Chinese trigger phrases:
+The system recognizes two types of voice commands:
+
+### Object Identification Triggers (Original MVP)
 
 | Trigger Phrase | Pinyin | English Translation |
 |----------------|--------|---------------------|
@@ -625,7 +730,23 @@ The system recognizes the following Chinese trigger phrases:
 | 幫我認 | bāng wǒ rèn | Help me recognize |
 | 睇下呢個 | dì xià nǐ gè | Look at this |
 
+### Voice Questions (NEW - TTS Feature)
+
+**English Questions:**
+- "describe the view" - Get a spoken description of what's in front
+- "what do I see" - Hear what objects are visible
+- "what's in front of me" - Identify objects ahead
+- "tell me what you see" - Request a detailed description
+
+**Chinese Questions:**
+- "描述一下景象" (miáo shù yī xià jǐng xiàng) - Describe the scene
+- "我看到什麼" (wǒ kàn dào shén me) - What do I see
+- "前面是什麼" (qián miàn shì shén me) - What's in front
+- "告訴我你看到什麼" (gào sù wǒ nǐ kàn dào shén me) - Tell me what you see
+
 **Cooldown**: 3 seconds between triggers to prevent duplicate captures.
+
+**Response**: Questions trigger image capture + AI analysis + spoken audio response through ESP32 speaker!
 
 ---
 
@@ -807,12 +928,6 @@ Contributions are welcome! Please follow these steps:
 - Add unit tests for new features
 - Update documentation as needed
 - Ensure all tests pass before submitting PR
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 

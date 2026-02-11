@@ -1,4 +1,4 @@
-# ESP32 ASR Capture Vision MVP - 快速開始
+# ESP32 ASR Capture Vision MVP + Real-Time AI Assistant - 快速開始
 
 ## 🚀 5 分鐘快速部署
 
@@ -26,8 +26,9 @@ chmod +x start_server.sh
 編輯 `backend/.env`：
 
 ```bash
-ASR_API_KEY=your_dashscope_api_key
-VISION_API_KEY=your_vision_api_key
+DASHSCOPE_API_KEY=your_dashscope_api_key
+QWEN_API_KEY=your_qwen_api_key
+TTS_API_KEY=your_tts_api_key
 ```
 
 ### 3. 測試系統
@@ -72,8 +73,9 @@ python test_upload.py test.jpg http://your-ec2-ip:8000
 - 網路: 開放端口 8000
 
 ### ESP32 硬體（可選）
-- ESP32-CAM 模組
+- ESP32-CAM 模組（OV3660 相機，8MB PSRAM）
 - I2S 麥克風（INMP441 或類似）
+- I2S 喇叭（MAX98357A 或類似）- 用於 TTS 音訊播放
 - USB 轉 TTL 燒錄器
 
 ## 🔧 故障排除
@@ -108,9 +110,11 @@ grep API_KEY backend/.env
 ## 🎯 MVP 成功標準
 
 ✅ 使用者說觸發詞 → 拍照 → 識別結果（10 秒內）
+✅ 使用者問問題 → 拍照 → AI 分析 → TTS 語音回應（10 秒內）
 ✅ 斷線自動重連
 ✅ Web UI 即時顯示
 ✅ API 金鑰安全儲存
+✅ 音訊播放流暢無卡頓
 
 ## 💡 提示
 
