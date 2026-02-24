@@ -1,0 +1,31 @@
+EE 3220 - System-on-Chip Design - 2025/26 Spring
+Assignment 1 - Due date: Feb 23, 2026 (Monday) - 23:59pm.
+‘Submission method - Canvas online assignment collection box
+
+Name: Date:
+Student ID: Mark:
+
+‘Submission guidelines:
+
+Please prepare your assignmentn “PDF” format. (1%)
+Please rename your file to"EE3220 ~ assignment 1 - studentiD pd.
+0%)
+
+Forlate submission, 10% deduction per day.
+
+4: Consider a controller fora drone (as shown below) as an embedded computer
+system.
+
+Buetoetn
+Buetoon ‘Sonal
+
+=
+wlan KD) woo KY sean
+
+y¢g¢
+
+ors ator
+Sensors edule Conera conte
+‘sensor ors viceo Motor
+
+Sora Sorat Sonal Sonal
