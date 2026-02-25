@@ -7,7 +7,7 @@
  * - WebSocket communication
  * - Auto-reconnection
  * 
- * Hardware: ESP32-CAM with I2S microphone
+ * Hardware: ESP32-S3-DEV with I2S microphone
  * 
  * Libraries required:
  * - ArduinoWebsockets
@@ -26,7 +26,7 @@ const char* password = "YOUR_WIFI_PASSWORD";
 
 // Server configuration (AWS EC2)
 const char* serverHost = "your-ec2-public-ip";  // e.g., "54.123.45.67"
-const int serverPort = 8000;
+const int serverPort = 8080;
 
 // WebSocket paths
 const char* wsAudioPath = "/ws_audio";
@@ -34,30 +34,30 @@ const char* wsCtrlPath = "/ws_ctrl";
 const char* wsCameraPath = "/ws_camera";
 
 // Audio configuration
-#define SAMPLE_RATE 16000
-#define I2S_PORT I2S_NUM_0
-#define I2S_WS 15
-#define I2S_SD 13
-#define I2S_SCK 2
-#define AUDIO_BUFFER_SIZE 3200  // 100ms at 16kHz mono PCM16
+#define SAMPLE_RATE 16000 
+#define I2S_PORT I2S_NUM_0 
+#define I2S_WS  42   // L/R Clock (Word Select) -> 接麥克風 WS/LRCK 
+#define I2S_SD  41   // Data -> 接麥克風 SD/DOUT 
+#define I2S_SCK 40   // Bit Clock -> 接麥克風 SCK/BCLK 
+#define AUDIO_BUFFER_SIZE 3200  // 100ms at 16kHz mono PCM16 
 
 // Camera pins (ESP32-CAM AI-Thinker)
-#define PWDN_GPIO_NUM     32
-#define RESET_GPIO_NUM    -1
-#define XCLK_GPIO_NUM      0
-#define SIOD_GPIO_NUM     26
-#define SIOC_GPIO_NUM     27
-#define Y9_GPIO_NUM       35
-#define Y8_GPIO_NUM       34
-#define Y7_GPIO_NUM       39
-#define Y6_GPIO_NUM       36
-#define Y5_GPIO_NUM       21
-#define Y4_GPIO_NUM       19
-#define Y3_GPIO_NUM       18
-#define Y2_GPIO_NUM        5
-#define VSYNC_GPIO_NUM    25
-#define HREF_GPIO_NUM     23
-#define PCLK_GPIO_NUM     22
+#define PWDN_GPIO_NUM    -1  
+#define RESET_GPIO_NUM   -1  
+#define XCLK_GPIO_NUM    15  
+#define SIOD_GPIO_NUM    4  
+#define SIOC_GPIO_NUM    5  
+#define Y9_GPIO_NUM      16  
+#define Y8_GPIO_NUM      17  
+#define Y7_GPIO_NUM      18  
+#define Y6_GPIO_NUM      12  
+#define Y5_GPIO_NUM      10  
+#define Y4_GPIO_NUM      8  
+#define Y3_GPIO_NUM      9  
+#define Y2_GPIO_NUM      11  
+#define VSYNC_GPIO_NUM   6  
+#define HREF_GPIO_NUM    7  
+#define PCLK_GPIO_NUM    13
 
 using namespace websockets;
 
