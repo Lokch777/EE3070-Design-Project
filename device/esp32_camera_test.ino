@@ -15,36 +15,50 @@
 #include <WiFi.h>
 #include <ArduinoWebsockets.h>
 #include "esp_camera.h"
-#include "soc/soc.h"           // Disable brownout problems
-#include "soc/rtc_cntl_reg.h"  // Disable brownout problems
+
 
 // WiFi credentials
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
+const char* ssid = "***";
+const char* password = "***";
 
 // EC2 Server configuration
-const char* serverHost = "your-ec2-public-ip";  // e.g., "54.123.45.67"
-const int serverPort = 8000;
+const char* serverHost = "***";  // e.g., "54.123.45.67"
+const int serverPort = 8080;
 const char* websocketPath = "/ws_camera";
 
 // Camera pins for ESP32-CAM with OV3660 (8MB PSRAM)
 // Note: OV3660 uses same pin configuration as OV2640 on ESP32-CAM AI-Thinker
-#define PWDN_GPIO_NUM     32
-#define RESET_GPIO_NUM    -1
-#define XCLK_GPIO_NUM      0
-#define SIOD_GPIO_NUM     26
-#define SIOC_GPIO_NUM     27
-#define Y9_GPIO_NUM       35
-#define Y8_GPIO_NUM       34
-#define Y7_GPIO_NUM       39
-#define Y6_GPIO_NUM       36
-#define Y5_GPIO_NUM       21
-#define Y4_GPIO_NUM       19
-#define Y3_GPIO_NUM       18
-#define Y2_GPIO_NUM        5
-#define VSYNC_GPIO_NUM    25
-#define HREF_GPIO_NUM     23
-#define PCLK_GPIO_NUM     22
+#define PWDN_GPIO_NUM    -1 
+
+#define RESET_GPIO_NUM   -1 
+
+#define XCLK_GPIO_NUM    15 
+
+#define SIOD_GPIO_NUM    4 
+
+#define SIOC_GPIO_NUM    5 
+
+#define Y9_GPIO_NUM      16 
+
+#define Y8_GPIO_NUM      17 
+
+#define Y7_GPIO_NUM      18 
+
+#define Y6_GPIO_NUM      12 
+
+#define Y5_GPIO_NUM      10 
+
+#define Y4_GPIO_NUM      8 
+
+#define Y3_GPIO_NUM      9 
+
+#define Y2_GPIO_NUM      11 
+
+#define VSYNC_GPIO_NUM   6 
+
+#define HREF_GPIO_NUM    7 
+
+#define PCLK_GPIO_NUM    13 
 
 using namespace websockets;
 WebsocketsClient client;
@@ -54,8 +68,7 @@ void setup() {
   delay(1000);  // Give serial time to initialize
   Serial.println("\n\nESP32 Camera Upload Test");
   
-  // Disable brownout detector (can cause reboots)
-  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+ 
   
   // Initialize camera
   Serial.println("Initializing camera...");
@@ -132,7 +145,7 @@ bool initCamera() {
   // Image quality settings (optimized for 8MB PSRAM + OV3660)
   if (psramFound()) {
     Serial.println("PSRAM found! Using high quality settings");
-    config.frame_size = FRAMESIZE_SVGA;  // 800x600 (OV3660 supports up to 3MP)
+    config.frame_size = FRAMESIZE_VGA;  // 800x600 (OV3660 supports up to 3MP) CHANGE-> VGA 640x480)
     config.jpeg_quality = 10;  // Lower number = higher quality
     config.fb_count = 2;  // Double buffering with PSRAM
   } else {
