@@ -7,52 +7,223 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>ESP32 ASR 視覺辨識系統</h1>
-            <div class="connection-status" id="connectionStatus">
-                <span class="status-indicator" id="statusIndicator"></span>
-                <span id="statusText">連線中...</span>
-            </div>
-        </header>
+    <div class="ambient" aria-hidden="true">
+        <span class="orb orb-1"></span>
+        <span class="orb orb-2"></span>
+        <span class="orb orb-3"></span>
+    </div>
 
-        <main>
-            <!-- ASR 文字顯示區域 -->
-            <section class="asr-section">
-                <h2>語音辨識</h2>
-                <div class="asr-display" id="asrDisplay">
-                    <div class="asr-text" id="asrText">等待語音輸入...</div>
+    <div class="page">
+        <div class="container">
+            <header class="topbar">
+                <div class="brand">
+                    <div class="logo">E32</div>
+                    <div class="brand-text">
+                        <p class="eyebrow">ASR · Vision · Edge AI</p>
+                        <h1>ESP32 ASR 視覺辨識系統</h1>
+                        <p class="tagline">本地語音觸發與即時影像辨識的 MVP 控制台</p>
+                    </div>
                 </div>
-            </section>
 
-            <!-- 觸發事件列表 -->
-            <section class="events-section">
-                <h2>觸發事件</h2>
-                <div class="events-list" id="eventsList">
-                    <p class="no-events">尚無觸發事件</p>
+                <div class="status-card">
+                    <div class="connection-status" id="connectionStatus">
+                        <span class="status-indicator" id="statusIndicator"></span>
+                        <div class="status-text">
+                            <span class="status-label">連線狀態</span>
+                            <span id="statusText">連線中...</span>
+                        </div>
+                    </div>
                 </div>
-            </section>
+            </header>
 
-            <!-- 影像顯示區域 -->
-            <section class="image-section">
-                <h2>最新快照</h2>
-                <div class="image-display" id="imageDisplay">
-                    <p class="no-image">等待拍照...</p>
+            <main class="dashboard">
+                <!-- ASR 文字顯示區域 -->
+                <section class="card asr-section">
+                    <div class="section-header">
+                        <h2>語音辨識</h2>
+                        <span class="section-chip">Live</span>
+                    </div>
+                    <div class="asr-display" id="asrDisplay">
+                        <div class="asr-text" id="asrText">等待語音輸入...</div>
+                    </div>
+                </section>
+
+                <!-- 系統資訊卡 -->
+                <section class="card info-section">
+                    <div class="section-header">
+                        <h2>系統概況</h2>
+                        <span class="section-meta">Realtime stats</span>
+                    </div>
+                    <div class="info-grid">
+                        <div class="info-card">
+                            <p class="info-label">連線狀態</p>
+                            <p class="info-value" id="statWs">連線中</p>
+                            <div class="info-rows">
+                                <div class="info-row">
+                                    <span>Last event</span>
+                                    <span id="statLastEvent">--</span>
+                                </div>
+                                <div class="info-row">
+                                    <span>Req ID</span>
+                                    <span id="statLastReq">--</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="info-card">
+                            <p class="info-label">系統事件</p>
+                            <p class="info-value" id="statTotalEvents">0</p>
+                            <div class="info-rows">
+                                <div class="info-row">
+                                    <span>Images stored</span>
+                                    <span id="statImagesStored">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="info-card">
+                            <p class="info-label">ASR</p>
+                            <p class="info-value" id="statAsrFinal">0</p>
+                            <div class="info-rows">
+                                <div class="info-row">
+                                    <span>Partial</span>
+                                    <span id="statAsrPartial">0</span>
+                                </div>
+                                <div class="info-row">
+                                    <span>Last text</span>
+                                    <span id="statLastAsr">--</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="info-card">
+                            <p class="info-label">觸發與辨識</p>
+                            <p class="info-value" id="statTriggers">0</p>
+                            <div class="info-rows">
+                                <div class="info-row">
+                                    <span>Vision</span>
+                                    <span id="statVision">0</span>
+                                </div>
+                                <div class="info-row">
+                                    <span>Confidence</span>
+                                    <span id="statVisionConf">--</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="info-card">
+                            <p class="info-label">影像接收</p>
+                            <p class="info-value" id="statImages">0</p>
+                            <div class="info-rows">
+                                <div class="info-row">
+                                    <span>Last size</span>
+                                    <span id="statImageSize">--</span>
+                                </div>
+                                <div class="info-row">
+                                    <span>Last time</span>
+                                    <span id="statImageTime">--</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="info-card">
+                            <p class="info-label">Health</p>
+                            <p class="info-value" id="statHealth">--</p>
+                            <div class="info-rows">
+                                <div class="info-row">
+                                    <span>Audio</span>
+                                    <span id="statAudio">--</span>
+                                </div>
+                                <div class="info-row">
+                                    <span>Camera</span>
+                                    <span id="statCamera">--</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="info-card">
+                            <p class="info-label">最近觸發</p>
+                            <p class="info-value" id="statLastTrigger">--</p>
+                            <div class="info-rows">
+                                <div class="info-row">
+                                    <span>Keyword</span>
+                                    <span id="statTriggerKeyword">--</span>
+                                </div>
+                                <div class="info-row">
+                                    <span>Time</span>
+                                    <span id="statTriggerTime">--</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="info-card">
+                            <p class="info-label">最近辨識</p>
+                            <p class="info-value" id="statLastVision">--</p>
+                            <div class="info-rows">
+                                <div class="info-row">
+                                    <span>Req ID</span>
+                                    <span id="statVisionReq">--</span>
+                                </div>
+                                <div class="info-row">
+                                    <span>Time</span>
+                                    <span id="statVisionTime">--</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 觸發事件列表 -->
+                <section class="card events-section">
+                    <div class="section-header">
+                        <h2>觸發事件</h2>
+                        <span class="section-meta">最多 10 筆</span>
+                    </div>
+                    <div class="events-list" id="eventsList">
+                        <p class="no-events">尚無觸發事件</p>
+                    </div>
+                </section>
+
+                <!-- 影像顯示區域 -->
+                <section class="card image-section">
+                    <div class="section-header">
+                        <h2>最新快照</h2>
+                        <span class="section-meta">Camera feed</span>
+                    </div>
+                    <div class="image-display" id="imageDisplay">
+                        <p class="no-image">等待拍照...</p>
+                    </div>
+                    <div class="image-meta">
+                        <span id="imageFilename">--</span>
+                        <span id="imageSize">--</span>
+                        <span id="imageTime">--</span>
+                    </div>
+                </section>
+
+                <!-- 視覺辨識結果 -->
+                <section class="card vision-section">
+                    <div class="section-header">
+                        <h2>辨識結果</h2>
+                        <span class="section-meta">AI inference</span>
+                    </div>
+                    <div class="vision-result" id="visionResult">
+                        <p class="no-result">等待辨識結果...</p>
+                    </div>
+                </section>
+
+                <!-- 系統 Log -->
+                <section class="card log-section">
+                    <div class="section-header">
+                        <h2>系統 Log</h2>
+                        <span class="section-meta">Latest 20</span>
+                    </div>
+                    <div class="log-list" id="logList">
+                        <p class="no-log">尚無系統紀錄</p>
+                    </div>
+                </section>
+            </main>
+
+            <footer>
+                <div class="footer-left">
+                    <span class="footer-title">ESP32 ASR Capture Vision MVP</span>
+                    <span class="footer-version">v0.1.0</span>
                 </div>
-            </section>
-
-            <!-- 視覺辨識結果 -->
-            <section class="vision-section">
-                <h2>辨識結果</h2>
-                <div class="vision-result" id="visionResult">
-                    <p class="no-result">等待辨識結果...</p>
-                </div>
-            </section>
-        </main>
-
-        <footer>
-            <p>ESP32 ASR Capture Vision MVP v0.1.0</p>
-        </footer>
+                <span class="footer-right">Edge-ready • Secure link</span>
+            </footer>
+        </div>
     </div>
 
     <script src="app.js"></script>
