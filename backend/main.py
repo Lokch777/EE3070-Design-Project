@@ -491,6 +491,10 @@ async def forward_capture_requests_to_ctrl():
 if Path("../web").exists():
     app.mount("/web", StaticFiles(directory="../web"), name="web")
 
+# Mount images for web UI preview
+if IMAGES_DIR.exists():
+    app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
