@@ -21,13 +21,9 @@ class ASRBridge:
         self.connected = False
         self.reconnect_attempts = 0
         self.max_reconnect_attempts = 3
-        self.reconnect_delay = 1
+        self.reconnect_delay = 5
         self.current_device_id = "default"
         self.task_id = ""
-        self._sent_audio_chunks = 0
-        self._sent_audio_bytes = 0
-        self._last_send_log_at = 0.0
-        self._received_events = 0
         
         # 開啟測試錄音 (如果不需要可以將這段註解掉)
         self.debug_wav = wave.open("debug_esp32_audio.wav", "wb")
@@ -47,7 +43,7 @@ class ASRBridge:
                     "task_group": "audio", "task": "asr", "function": "recognition", "model": self.model_id,
                     "input": {"format": "pcm", "sample_rate": 16000},
                     "parameters": {
-                        "language_hints": ["en", "zh"],
+                        "language_hints": ["en"], # 確保鎖定英文
                         "enable_intermediate_result": True,
                         "enable_punctuation_prediction": True,
                         "enable_inverse_text_normalization": True
@@ -61,10 +57,6 @@ class ASRBridge:
             if result.get("header", {}).get("event") == "task-started":
                 self.connected = True
                 self.reconnect_attempts = 0
-                self._sent_audio_chunks = 0
-                self._sent_audio_bytes = 0
-                self._last_send_log_at = 0.0
-                self._received_events = 0
                 logger.info(f"ASR connected successfully! Task ID: {self.task_id}")
                 return True
             return False
@@ -79,18 +71,6 @@ class ASRBridge:
             if hasattr(self, 'debug_wav') and self.debug_wav:
                 self.debug_wav.writeframes(audio_chunk)
             await self.ws.send(audio_chunk)
-            self._sent_audio_chunks += 1
-            self._sent_audio_bytes += len(audio_chunk)
-            now = time.time()
-            if self._sent_audio_chunks == 1 or (now - self._last_send_log_at) >= 2.0:
-                logger.info(
-                    "ASR audio upload active: device=%s chunks=%s bytes=%s last_chunk=%s",
-                    self.current_device_id,
-                    self._sent_audio_chunks,
-                    self._sent_audio_bytes,
-                    len(audio_chunk),
-                )
-                self._last_send_log_at = now
         except Exception as e:
             logger.error(f"Failed to send audio to ASR: {e}")
             self.connected = False
@@ -102,41 +82,17 @@ class ASRBridge:
                 try:
                     result = json.loads(message)
                     header = result.get("header", {})
-                    event_name = header.get("event", "unknown")
-                    self._received_events += 1
-                    text = self._extract_text(result)
-                    sentence_end = self._is_sentence_end(result)
-
-                    if self._received_events <= 8 or text:
-                        logger.info(
-                            "ASR event received: event=%s text_len=%s sentence_end=%s",
-                            event_name,
-                            len(text),
-                            sentence_end,
-                        )
-
-                    if event_name in ["task-generated", "result-generated"]:
+                    if header.get("event") in ["task-generated", "result-generated"]:
+                        text = result.get("payload", {}).get("output", {}).get("sentence", {}).get("text", "")
                         if text:
-                            logger.info(
-                                "ASR %s: %s",
-                                "final" if sentence_end else "partial",
-                                text,
-                            )
                             event = Event(
-                                event_type=(
-                                    EventType.ASR_FINAL.value
-                                    if sentence_end
-                                    else EventType.ASR_PARTIAL.value
-                                ),
+                                event_type=EventType.ASR_FINAL.value,
                                 timestamp=time.time(),
                                 data={"text": text, "device_id": self.current_device_id}
                             )
                             await self.event_bus.publish(event)
-                            if sentence_end:
-                                yield event
-                        else:
-                            logger.info("ASR event had no extractable text: event=%s raw=%s", event_name, result)
-                    elif event_name == "task-failed":
+                            yield event
+                    elif header.get("event") == "task-failed":
                         logger.error(f"ASR Task Failed: {result}")
                         self.connected = False
                         break
@@ -170,39 +126,4 @@ class ASRBridge:
         # 徹底解決因為封包大小稍微不對，導致聲音缺一角(對講機斷訊)的問題
         if len(audio_data) > 0:
             return True
-        return False
-
-    def _extract_text(self, result: dict) -> str:
-        payload = result.get("payload", {}) or {}
-        output = payload.get("output", {}) or {}
-
-        sentence = output.get("sentence", {}) or {}
-        if isinstance(sentence, dict):
-            text = sentence.get("text")
-            if isinstance(text, str) and text:
-                return text
-
-        text = output.get("text")
-        if isinstance(text, str) and text:
-            return text
-
-        sentences = output.get("sentences")
-        if isinstance(sentences, list):
-            parts = []
-            for item in sentences:
-                if isinstance(item, dict):
-                    text = item.get("text")
-                    if isinstance(text, str) and text:
-                        parts.append(text)
-            if parts:
-                return " ".join(parts)
-
-        return ""
-
-    def _is_sentence_end(self, result: dict) -> bool:
-        payload = result.get("payload", {}) or {}
-        output = payload.get("output", {}) or {}
-        sentence = output.get("sentence", {}) or {}
-        if isinstance(sentence, dict):
-            return bool(sentence.get("sentence_end"))
         return False

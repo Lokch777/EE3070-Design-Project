@@ -2,6 +2,7 @@
 import asyncio
 import time
 import logging
+import re
 from typing import Optional, List, Dict
 from dataclasses import dataclass
 from fuzzywuzzy import fuzz
@@ -133,6 +134,33 @@ class QuestionTriggerEngine:
                 device_id=event.data.get("device_id", "default"),
                 req_id=event.req_id
             )
+
+    def _build_short_question(self, text: str, phrase: str, position: int) -> str:
+        """Extract a short, clean question to keep vision output concise."""
+        tail = text[position + len(phrase):].strip()
+        if not tail:
+            return "前方是什麼？"
+
+        # Keep the first sentence only.
+        tail = re.split(r"[。！？!?]", tail, maxsplit=1)[0]
+        tail = re.sub(r"\s+", " ", tail).strip(" ,，。！？!?")
+        if not tail:
+            return "前方是什麼？"
+
+        # Cap question length to avoid passing ASR rambles to vision.
+        if len(tail) > 18:
+            tail = tail[:18]
+
+        tail_lower = tail.lower()
+        if (
+            "什麼" in tail
+            or "what" in tail_lower
+            or "which" in tail_lower
+            or "where" in tail_lower
+            or "who" in tail_lower
+        ):
+            return tail
+        return f"{tail}是什麼？"
     
     def _detect_trigger(self, text: str) -> Optional[TriggerMatch]:
         """
@@ -152,11 +180,12 @@ class QuestionTriggerEngine:
             # Exact match
             if phrase_lower in text_lower:
                 position = text_lower.index(phrase_lower)
+                short_question = self._build_short_question(text, phrase, position)
                 return TriggerMatch(
                     phrase=phrase,
                     confidence=1.0,
                     position=position,
-                    question=text
+                    question=short_question
                 )
             
             # Fuzzy match
@@ -168,7 +197,7 @@ class QuestionTriggerEngine:
                     phrase=phrase,
                     confidence=confidence,
                     position=0,
-                    question=text
+                    question="前方是什麼？"
                 )
         
         return None

@@ -17,17 +17,30 @@ class CaptureCoordinator:
     Manages timeouts, validates received images, and implements retry logic.
     """
     
-    def __init__(self, event_bus: EventBus, timeout_seconds: int = 5, max_retries: int = 2):
+    def __init__(
+        self,
+        event_bus: EventBus,
+        timeout_seconds: int = 5,
+        max_retries: int = 2,
+        transfer_timeout_seconds: int = 30,
+    ):
         self.event_bus = event_bus
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
+        self.transfer_timeout_seconds = transfer_timeout_seconds
         self.pending_captures: Dict[str, asyncio.Future] = {}
         self.retry_counts: Dict[str, int] = {}
         self.request_device_ids: Dict[str, str] = {}
         self.request_trigger_texts: Dict[str, str] = {}
+        self.transfer_started_at: Dict[str, float] = {}
         self.state = RequestState.LISTENING.value
         
-        logger.info(f"CaptureCoordinator initialized with {timeout_seconds}s timeout, {max_retries} max retries")
+        logger.info(
+            "CaptureCoordinator initialized with %ss request timeout, %ss transfer timeout, %s max retries",
+            timeout_seconds,
+            transfer_timeout_seconds,
+            max_retries,
+        )
     
     async def request_capture(
         self,
@@ -94,15 +107,13 @@ class CaptureCoordinator:
         future = self.pending_captures[req_id]
         
         try:
-            # Wait with timeout
-            image_bytes = await asyncio.wait_for(future, timeout=self.timeout_seconds)
+            image_bytes = await self._wait_for_image_with_progress(req_id, future)
             logger.info(f"Image received for req_id={req_id}")
             self.state = RequestState.DONE.value
-            
-            # Clean up retry count on success
+
             if req_id in self.retry_counts:
                 del self.retry_counts[req_id]
-            
+
             return image_bytes
             
         except asyncio.TimeoutError:
@@ -165,10 +176,46 @@ class CaptureCoordinator:
                 del self.pending_captures[req_id]
             self.request_device_ids.pop(req_id, None)
             self.request_trigger_texts.pop(req_id, None)
+            self.transfer_started_at.pop(req_id, None)
             
             # Reset state
             if self.state != RequestState.ERROR.value:
                 self.state = RequestState.LISTENING.value
+
+    async def _wait_for_image_with_progress(self, req_id: str, future: asyncio.Future) -> bytes:
+        started_at = time.time()
+
+        while True:
+            if future.done():
+                return future.result()
+
+            transfer_started_at = self.transfer_started_at.get(req_id)
+            timeout_limit = self.transfer_timeout_seconds if transfer_started_at else self.timeout_seconds
+            reference_time = transfer_started_at or started_at
+            elapsed = time.time() - reference_time
+
+            if elapsed >= timeout_limit:
+                raise asyncio.TimeoutError()
+
+            wait_slice = min(0.5, max(0.1, timeout_limit - elapsed))
+            try:
+                return await asyncio.wait_for(asyncio.shield(future), timeout=wait_slice)
+            except asyncio.TimeoutError:
+                continue
+
+    def mark_capture_started(self, req_id: str, expected_size: int = 0) -> None:
+        """Mark that the camera has sent the image header and upload is in progress."""
+        if req_id not in self.pending_captures:
+            logger.warning("Received image header for unexpected req_id=%s", req_id)
+            return
+
+        if req_id not in self.transfer_started_at:
+            self.transfer_started_at[req_id] = time.time()
+            logger.info(
+                "Image transfer started for req_id=%s, expected_size=%s bytes",
+                req_id,
+                expected_size,
+            )
     
     def receive_image(self, req_id: str, image_bytes: bytes) -> bool:
         """

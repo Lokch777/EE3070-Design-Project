@@ -41,7 +41,8 @@ class RequestState(str, Enum):
     DONE = "DONE"
     ERROR = "ERROR"
     COOLDOWN = "COOLDOWN"
-
+    CAPTURE_REQUESTED = "capture_requested"
+    COMPLETED = "completed"
 
 class ErrorType(str, Enum):
     """Error types for error handling"""

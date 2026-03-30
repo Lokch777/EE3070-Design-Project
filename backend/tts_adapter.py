@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import time
+import re
 from typing import Optional, Dict
 from dataclasses import dataclass
 
@@ -102,6 +103,8 @@ class TTSAdapter:
         if not text:
             logger.warning(f"Empty description in vision response: {event.req_id}")
             return
+
+        text = self._compact_text_for_tts(text)
         
         logger.info(f"Converting vision response to speech: req_id={event.req_id}")
         
@@ -123,6 +126,26 @@ class TTSAdapter:
                 event.req_id,
                 device_id=event.data.get("device_id", "unknown")
             )
+
+    def _compact_text_for_tts(self, text: str) -> str:
+        """Keep speech concise to reduce TTS and playback latency."""
+        cleaned = re.sub(r"\s+", " ", (text or "").strip())
+        if not cleaned:
+            return "前方有物件。"
+
+        # Keep only first sentence.
+        first = re.split(r"[。！？!?]", cleaned, maxsplit=1)[0].strip(" ,，")
+        if not first:
+            first = cleaned
+
+        # Hard cap length to keep response short and fast.
+        if len(first) > 22:
+            first = first[:22]
+
+        # Ensure sentence ending for natural prosody.
+        if first and first[-1] not in "。！？!?":
+            first += "。"
+        return first
     
     async def _convert_to_speech_with_retry(self, text: str) -> AudioData:
         """

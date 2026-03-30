@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
     
     # ASR Service
+    asr_model: str = Field(default="qwen3-asr-flash-realtime", env="ASR_MODEL")
     asr_api_key: str = Field(..., env="ASR_API_KEY")
     asr_endpoint: str = Field(
         default="wss://dashscope.aliyuncs.com/api/v1/services/audio/asr",
@@ -27,19 +28,21 @@ class Settings(BaseSettings):
     )
     
     # TTS Service
+    tts_model: str = Field(default="qwen3-tts-flash-realtime", env="TTS_MODEL")
     tts_api_key: str = Field(..., env="TTS_API_KEY")
     tts_endpoint: str = Field(
         default="wss://dashscope.aliyuncs.com/api/v1/services/audio/tts",
         env="TTS_ENDPOINT"
     )
-    tts_voice: str = Field(default="zhifeng_emo", env="TTS_VOICE")
-    tts_language: str = Field(default="zh-CN", env="TTS_LANGUAGE")
+    tts_voice: str = Field(default="Kiki", env="TTS_VOICE")
+    tts_language: str = Field(default="zh", env="TTS_LANGUAGE")
     tts_speed: float = Field(default=1.0, env="TTS_SPEED")
     tts_pitch: float = Field(default=1.0, env="TTS_PITCH")
     tts_audio_format: str = Field(default="pcm", env="TTS_AUDIO_FORMAT")
     tts_sample_rate: int = Field(default=16000, env="TTS_SAMPLE_RATE")
     tts_timeout_seconds: float = Field(default=5.0, env="TTS_TIMEOUT_SECONDS")
     tts_retry_attempts: int = Field(default=1, env="TTS_RETRY_ATTEMPTS")
+    tts_fallback_max_chars: int = Field(default=12, env="TTS_FALLBACK_MAX_CHARS")
     
     # Server Configuration
     server_host: str = Field(default="0.0.0.0", env="SERVER_HOST")
@@ -68,6 +71,8 @@ class Settings(BaseSettings):
     audio_chunk_size: int = Field(default=4096, env="AUDIO_CHUNK_SIZE")
     audio_buffer_size: int = Field(default=16384, env="AUDIO_BUFFER_SIZE")
     audio_stream_timeout: float = Field(default=10.0, env="AUDIO_STREAM_TIMEOUT")
+    audio_chunk_pacing_seconds: float = Field(default=0.02, env="AUDIO_CHUNK_PACING_SECONDS")
+    audio_realtime_pacing_factor: float = Field(default=0.9, env="AUDIO_REALTIME_PACING_FACTOR")
     
     # AWS EC2 Configuration
     public_url: Optional[str] = Field(default=None, env="PUBLIC_URL")
