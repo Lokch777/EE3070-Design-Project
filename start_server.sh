@@ -1,52 +1,69 @@
 #!/bin/bash
-# ESP32 ASR Capture Vision MVP - Server Startup Script
+# Omni Realtime Gateway — Server Startup Script
+#
+# Usage:
+#   ./start_server.sh              # start realtime gateway (default)
+#   ./start_server.sh legacy       # start original ASR/Vision/TTS backend
+
+set -e
+
+MODE="${1:-omni}"
 
 echo "=================================="
-echo "ESP32 ASR Capture Vision MVP"
+echo "EE3070 Design Project — Backend"
+echo "Mode: ${MODE}"
 echo "=================================="
 echo ""
 
-# Check if running in backend directory
-if [ ! -f "main.py" ]; then
-    echo "Changing to backend directory..."
-    cd backend
-fi
+# Locate repo root (script may be called from any directory)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
-# Check if virtual environment exists
+# Create / activate virtual environment
 if [ ! -d "venv" ]; then
     echo "Creating virtual environment..."
     python3 -m venv venv
 fi
-
-# Activate virtual environment
 echo "Activating virtual environment..."
 source venv/bin/activate
 
-# Install/update dependencies
+# Install dependencies
 echo "Installing dependencies..."
 pip install --upgrade pip -q
-pip install -r requirements.txt -q
+pip install -r backend/requirements.txt -q
 
-# Check if .env exists
+# Ensure .env exists
 if [ ! -f ".env" ]; then
     echo ""
     echo "⚠️  WARNING: .env file not found!"
-    echo "Creating .env from .env.example..."
-    cp .env.example .env
+    if [ -f ".env.example" ]; then
+        cp .env.example .env
+        echo "Created .env from .env.example."
+    fi
+    echo "Please edit .env and set DASHSCOPE_API_KEY, then re-run."
     echo ""
-    echo "Please edit .env and add your API keys:"
-    echo "  nano .env"
-    echo ""
-    read -p "Press Enter to continue or Ctrl+C to exit..."
+    read -p "Press Enter to continue anyway or Ctrl+C to exit..."
 fi
 
-# Create images directory
-mkdir -p images
+# Load .env (set -a exports all sourced variables automatically)
+set -a
+# shellcheck source=.env
+source .env
+set +a
 
-# Start server
 echo ""
 echo "Starting server..."
 echo "=================================="
 echo ""
 
-python main.py
+if [ "$MODE" = "legacy" ]; then
+    # Original ASR/Vision/TTS backend
+    HOST="${SERVER_HOST:-0.0.0.0}"
+    PORT="${SERVER_PORT:-8080}"
+    uvicorn backend.main:app --host "$HOST" --port "$PORT" --reload
+else
+    # Realtime Omni gateway (default)
+    HOST="${REALTIME_HOST:-0.0.0.0}"
+    PORT="${REALTIME_PORT:-8765}"
+    uvicorn backend.realtime_gateway:app --host "$HOST" --port "$PORT" --reload
+fi

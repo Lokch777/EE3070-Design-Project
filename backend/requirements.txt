@@ -1,12 +1,12 @@
-# ESP32 ASR Capture Vision MVP - Python Dependencies
+# ESP32 ASR Capture Vision MVP + Omni Realtime Gateway — Python Dependencies
 
 # Web framework
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 
-# WebSocket support
-websockets==12.0
+# WebSocket support (>=13 required for additional_headers in connect())
+websockets==13.1
 python-socketio==5.10.0
 
 # Async support
