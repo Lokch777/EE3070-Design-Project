@@ -37,12 +37,12 @@ class AppCoordinator:
 
     def __init__(self, settings: Settings):
         self.settings = settings
-        omni_model = getattr(settings, "omni_model", None) or "qwen3.5-omni-flash-realtime"
-        omni_api_key = getattr(settings, "omni_api_key", None)
+        omni_model = settings.omni_model
+        omni_api_key = settings.omni_api_key
 
-        effective_asr_model = omni_model or getattr(settings, "asr_model", "qwen3.5-omni-flash-realtime")
-        effective_vision_model = omni_model or getattr(settings, "vision_model", "qwen3.5-omni-flash-realtime")
-        effective_tts_model = omni_model or getattr(settings, "tts_model", "qwen3.5-omni-flash-realtime")
+        effective_asr_model = omni_model
+        effective_vision_model = omni_model
+        effective_tts_model = omni_model
 
         effective_asr_api_key = omni_api_key or settings.asr_api_key
         effective_vision_api_key = omni_api_key or settings.vision_api_key
@@ -61,7 +61,6 @@ class AppCoordinator:
 
         self.error_handler = ErrorHandler(event_bus=self.event_bus)
 
-        # ✅ FIX 4: aligned fallback model_id
         self.asr_bridge = ASRBridge(
             api_key=effective_asr_api_key,
             endpoint=settings.asr_endpoint,
