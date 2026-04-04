@@ -286,7 +286,11 @@ nano .env  # Edit and add your API keys
 **Required Environment Variables** (`.env` file):
 
 ```env
-# API Keys
+# Unified Omni (preferred)
+OMNI_MODEL=qwen3.5-omni-flash-realtime
+OMNI_API_KEY=your_dashscope_omni_api_key_here
+
+# Legacy fallback keys (only needed if OMNI_API_KEY is not set)
 ASR_API_KEY=your_dashscope_asr_api_key_here
 VISION_API_KEY=your_qwen_vision_api_key_here
 
@@ -299,12 +303,13 @@ LOG_LEVEL=INFO
 ASR_ENDPOINT=wss://dashscope.aliyuncs.com/api/v1/services/audio/asr
 
 # Vision Configuration
-VISION_MODEL=qwen-vl-plus
+VISION_MODEL=qwen3.5-omni-flash-realtime
 VISION_ENDPOINT=https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
 VISION_TIMEOUT_SECONDS=8
 
 # TTS Configuration (NEW!)
 TTS_API_KEY=your_tts_api_key_here
+TTS_MODEL=qwen3.5-omni-flash-realtime
 TTS_ENDPOINT=wss://dashscope.aliyuncs.com/api/v1/services/audio/tts
 TTS_VOICE=zhifeng_emo
 TTS_LANGUAGE=zh-CN

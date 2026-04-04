@@ -37,6 +37,16 @@ class AppCoordinator:
 
     def __init__(self, settings: Settings):
         self.settings = settings
+        omni_model = settings.omni_model
+        omni_api_key = settings.omni_api_key
+
+        effective_asr_model = omni_model
+        effective_vision_model = omni_model
+        effective_tts_model = omni_model
+
+        effective_asr_api_key = omni_api_key or settings.asr_api_key
+        effective_vision_api_key = omni_api_key or settings.vision_api_key
+        effective_tts_api_key = omni_api_key or settings.tts_api_key
 
         self.event_bus = EventBus(buffer_size=settings.event_buffer_size)
 
@@ -51,12 +61,11 @@ class AppCoordinator:
 
         self.error_handler = ErrorHandler(event_bus=self.event_bus)
 
-        # ✅ FIX 4: aligned fallback model_id
         self.asr_bridge = ASRBridge(
-            api_key=settings.asr_api_key,
+            api_key=effective_asr_api_key,
             endpoint=settings.asr_endpoint,
             event_bus=self.event_bus,
-            model_id=getattr(settings, 'asr_model', 'qwen3-asr-flash-realtime-2026-02-10'),
+            model_id=effective_asr_model,
         )
 
         self.trigger_engine = TriggerEngine(
@@ -94,10 +103,10 @@ class AppCoordinator:
             max_retries=2,
         )
 
-        if settings.vision_api_key and settings.vision_api_key != "your_vision_api_key_here":
+        if effective_vision_api_key and effective_vision_api_key != "your_vision_api_key_here":
             self.vision_adapter: VisionLLMAdapter = QwenOmniAdapter(
-                api_key=settings.vision_api_key,
-                model=settings.vision_model,
+                api_key=effective_vision_api_key,
+                model=effective_vision_model,
                 endpoint=settings.vision_endpoint,
                 timeout_seconds=settings.vision_timeout_seconds,
             )
@@ -106,8 +115,9 @@ class AppCoordinator:
             self.vision_adapter = MockVisionAdapter()
 
         tts_config = TTSConfig(
-            api_key=settings.tts_api_key,
+            api_key=effective_tts_api_key,
             endpoint=settings.tts_endpoint,
+            model=effective_tts_model,
             voice=settings.tts_voice,
             language=settings.tts_language,
             speed=settings.tts_speed,
@@ -118,7 +128,7 @@ class AppCoordinator:
             fallback_max_chars=settings.tts_fallback_max_chars,
         )
 
-        if settings.tts_api_key and settings.tts_api_key != "your_tts_api_key_here":
+        if effective_tts_api_key and effective_tts_api_key != "your_tts_api_key_here":
             self.tts_client = TTSClient(tts_config)
         else:
             logger.warning("Using mock TTS client (no API key configured)")
