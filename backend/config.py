@@ -10,30 +10,26 @@ logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
-
-    # Unified Omni Configuration (preferred)
-    omni_model: str = Field(default="qwen3.5-omni-flash-realtime", env="OMNI_MODEL")
-    omni_api_key: Optional[str] = Field(default=None, env="OMNI_API_KEY")
     
     # ASR Service
-    asr_model: str = Field(default="qwen3.5-omni-flash-realtime", env="ASR_MODEL")
-    asr_api_key: Optional[str] = Field(default=None, env="ASR_API_KEY")
+    asr_model: str = Field(default="qwen3-asr-flash-realtime", env="ASR_MODEL")
+    asr_api_key: str = Field(..., env="ASR_API_KEY")
     asr_endpoint: str = Field(
         default="wss://dashscope.aliyuncs.com/api/v1/services/audio/asr",
         env="ASR_ENDPOINT"
     )
     
     # Vision Model
-    vision_api_key: Optional[str] = Field(default=None, env="VISION_API_KEY")
-    vision_model: str = Field(default="qwen3.5-omni-flash-realtime", env="VISION_MODEL")
+    vision_api_key: str = Field(..., env="VISION_API_KEY")
+    vision_model: str = Field(default="qwen-vl-plus", env="VISION_MODEL")
     vision_endpoint: str = Field(
         default="https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
         env="VISION_ENDPOINT"
     )
     
     # TTS Service
-    tts_model: str = Field(default="qwen3.5-omni-flash-realtime", env="TTS_MODEL")
-    tts_api_key: Optional[str] = Field(default=None, env="TTS_API_KEY")
+    tts_model: str = Field(default="qwen3-tts-flash-realtime", env="TTS_MODEL")
+    tts_api_key: str = Field(..., env="TTS_API_KEY")
     tts_endpoint: str = Field(
         default="wss://dashscope.aliyuncs.com/api/v1/services/audio/tts",
         env="TTS_ENDPOINT"
@@ -100,19 +96,14 @@ def load_settings() -> Settings:
 
 def validate_api_keys(settings: Settings) -> bool:
     """Validate that required API keys are present"""
-
-    if settings.omni_api_key and settings.omni_api_key != "your_omni_api_key_here":
-        logger.info("OMNI_API_KEY is configured and will be used for ASR/Vision/TTS")
-        return True
-
     if not settings.asr_api_key or settings.asr_api_key == "your_dashscope_api_key_here":
         logger.error("ASR_API_KEY is not configured")
         return False
-
+    
     if not settings.vision_api_key or settings.vision_api_key == "your_vision_api_key_here":
         logger.error("VISION_API_KEY is not configured")
         return False
-
+    
     if not settings.tts_api_key or settings.tts_api_key == "your_tts_api_key_here":
         logger.error("TTS_API_KEY is not configured")
         return False
