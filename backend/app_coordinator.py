@@ -24,6 +24,7 @@ from backend.omni_realtime_client import OmniRealtimeClient
 from backend.config import Settings
 
 logger = logging.getLogger(__name__)
+PCM16_BYTES_PER_SAMPLE = 2
 
 
 class AppCoordinator:
@@ -34,7 +35,21 @@ class AppCoordinator:
 
     def __init__(self, settings: Settings):
         self.settings = settings
-        omni_api_key = settings.omni_api_key or settings.asr_api_key or settings.vision_api_key or settings.tts_api_key
+        key_sources = [
+            ("OMNI_API_KEY", settings.omni_api_key),
+            ("ASR_API_KEY", settings.asr_api_key),
+            ("VISION_API_KEY", settings.vision_api_key),
+            ("TTS_API_KEY", settings.tts_api_key),
+        ]
+        selected_key_source = "none"
+        omni_api_key = None
+        for source_name, key_value in key_sources:
+            if (key_value or "").strip():
+                selected_key_source = source_name
+                omni_api_key = key_value
+                break
+        if selected_key_source != "OMNI_API_KEY":
+            logger.warning("Unified Omni auth is using legacy fallback credentials")
 
         self.event_bus = EventBus(buffer_size=settings.event_buffer_size)
 
@@ -552,6 +567,14 @@ class AppCoordinator:
             ))
             return
 
+        duration_seconds = 0.0
+        if result.audio_format.lower() == "pcm":
+            duration_seconds = (
+                len(result.audio_data)
+                / PCM16_BYTES_PER_SAMPLE
+                / max(result.sample_rate, 1)
+            )
+
         await self.event_bus.publish(Event(
             event_type=EventType.AUDIO_READY.value,
             timestamp=time.time(),
@@ -560,7 +583,7 @@ class AppCoordinator:
                 "audio_data": result.audio_data,
                 "audio_format": result.audio_format,
                 "sample_rate": result.sample_rate,
-                "duration_seconds": (len(result.audio_data) / 2) / max(result.sample_rate, 1),
+                "duration_seconds": duration_seconds,
                 "device_id": device_id,
             },
         ))

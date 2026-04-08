@@ -24,19 +24,19 @@ class Settings(BaseSettings):
     )
 
     # Legacy compatibility fields (fallback only)
-    asr_model: str = Field(default="qwen3.5-omni-plus-realtime", env="ASR_MODEL")
+    asr_model: str = Field(default="qwen3-asr-flash-realtime", env="ASR_MODEL")
     asr_api_key: Optional[str] = Field(default=None, env="ASR_API_KEY")
     asr_endpoint: str = Field(
         default="wss://dashscope.aliyuncs.com/api/v1/services/audio/asr",
         env="ASR_ENDPOINT"
     )
     vision_api_key: Optional[str] = Field(default=None, env="VISION_API_KEY")
-    vision_model: str = Field(default="qwen3.5-omni-plus-realtime", env="VISION_MODEL")
+    vision_model: str = Field(default="qwen-vl-plus", env="VISION_MODEL")
     vision_endpoint: str = Field(
         default="https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
         env="VISION_ENDPOINT"
     )
-    tts_model: str = Field(default="qwen3.5-omni-plus-realtime", env="TTS_MODEL")
+    tts_model: str = Field(default="qwen3-tts-flash-realtime", env="TTS_MODEL")
     tts_api_key: Optional[str] = Field(default=None, env="TTS_API_KEY")
     tts_endpoint: str = Field(
         default="wss://dashscope.aliyuncs.com/api/v1/services/audio/tts",
@@ -104,7 +104,8 @@ def load_settings() -> Settings:
 
 def validate_api_keys(settings: Settings) -> bool:
     """Validate that required API keys are present"""
-    if settings.omni_api_key and settings.omni_api_key != "your_omni_api_key_here":
+    omni_key = (settings.omni_api_key or "").strip()
+    if omni_key and omni_key != "your_omni_api_key_here":
         logger.info("OMNI_API_KEY is configured and will be used for unified realtime session")
         return True
 

@@ -210,7 +210,14 @@ class OmniRealtimeClient:
             self.ws = None
 
     def validate_audio_format(self, audio_data: bytes) -> bool:
-        return bool(audio_data)
+        if not audio_data:
+            return False
+        # Input stream is PCM16 mono; require even-byte frames and non-trivial chunk size.
+        if len(audio_data) < 320:
+            return False
+        if len(audio_data) % 2 != 0:
+            return False
+        return True
 
     async def analyze_image_and_synthesize(self, image_bytes: bytes, prompt: str, req_id: str) -> OmniRealtimeResult:
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
