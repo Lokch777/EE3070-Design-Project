@@ -3,7 +3,7 @@
 #   1. self._asr_connect_lock added inside __init__ (was at module level causing NameError)
 #   2. _ensure_asr_ready wrapped with asyncio.Lock (prevents double ASR connect race)
 #   3. unregister_audio_device passes websocket param (stale disconnect guard)
-#   4. ASR model_id fallback aligned to qwen3-asr-flash-realtime-2026-02-10
+#   4. Unified OmniRealtimeClient replaces separate ASR/Vision/TTS model adapters
 
 import asyncio
 import logging
@@ -13,17 +13,14 @@ from typing import Optional
 from fastapi import WebSocket
 
 from backend.event_bus import EventBus
-from backend.asr_bridge import ASRBridge
 from backend.trigger_engine import TriggerEngine
 from backend.question_trigger_engine import QuestionTriggerEngine, TriggerConfig
 from backend.capture_coordinator import CaptureCoordinator
-from backend.vision_adapter import VisionLLMAdapter, QwenOmniAdapter, MockVisionAdapter
-from backend.tts_adapter import TTSAdapter
-from backend.tts_client import TTSClient, TTSConfig, MockTTSClient
 from backend.audio_playback_coordinator import AudioPlaybackCoordinator, PlaybackConfig
 from backend.error_handler import ErrorHandler
 from backend.resource_manager import ResourceManager, MemoryMonitor
 from backend.models import Event, EventType, RequestState
+from backend.omni_realtime_client import OmniRealtimeClient
 from backend.config import Settings
 
 logger = logging.getLogger(__name__)
@@ -32,11 +29,12 @@ logger = logging.getLogger(__name__)
 class AppCoordinator:
     """
     Main application coordinator that integrates all components.
-    Manages the complete flow: Audio → ASR → Trigger → Capture → Vision → UI
+    Manages the complete flow: Audio → ASR → Trigger → Capture → Omni → Playback/UI
     """
 
     def __init__(self, settings: Settings):
         self.settings = settings
+        omni_api_key = settings.omni_api_key or settings.asr_api_key or settings.vision_api_key or settings.tts_api_key
 
         self.event_bus = EventBus(buffer_size=settings.event_buffer_size)
 
@@ -51,12 +49,16 @@ class AppCoordinator:
 
         self.error_handler = ErrorHandler(event_bus=self.event_bus)
 
-        # ✅ FIX 4: aligned fallback model_id
-        self.asr_bridge = ASRBridge(
-            api_key=settings.asr_api_key,
-            endpoint=settings.asr_endpoint,
+        self.omni_client = OmniRealtimeClient(
+            api_key=omni_api_key or "",
+            model=settings.omni_model,
             event_bus=self.event_bus,
-            model_id=getattr(settings, 'asr_model', 'qwen3-asr-flash-realtime-2026-02-10'),
+            realtime_endpoint=settings.omni_realtime_endpoint,
+            http_endpoint=settings.omni_http_endpoint,
+            timeout_seconds=max(settings.vision_timeout_seconds, settings.tts_timeout_seconds),
+            tts_voice=settings.tts_voice,
+            tts_sample_rate=settings.tts_sample_rate,
+            tts_audio_format=settings.tts_audio_format,
         )
 
         self.trigger_engine = TriggerEngine(
@@ -94,43 +96,6 @@ class AppCoordinator:
             max_retries=2,
         )
 
-        if settings.vision_api_key and settings.vision_api_key != "your_vision_api_key_here":
-            self.vision_adapter: VisionLLMAdapter = QwenOmniAdapter(
-                api_key=settings.vision_api_key,
-                model=settings.vision_model,
-                endpoint=settings.vision_endpoint,
-                timeout_seconds=settings.vision_timeout_seconds,
-            )
-        else:
-            logger.warning("Using mock vision adapter (no API key configured)")
-            self.vision_adapter = MockVisionAdapter()
-
-        tts_config = TTSConfig(
-            api_key=settings.tts_api_key,
-            endpoint=settings.tts_endpoint,
-            voice=settings.tts_voice,
-            language=settings.tts_language,
-            speed=settings.tts_speed,
-            pitch=settings.tts_pitch,
-            audio_format=settings.tts_audio_format,
-            sample_rate=settings.tts_sample_rate,
-            timeout_seconds=settings.tts_timeout_seconds,
-            fallback_max_chars=settings.tts_fallback_max_chars,
-        )
-
-        if settings.tts_api_key and settings.tts_api_key != "your_tts_api_key_here":
-            self.tts_client = TTSClient(tts_config)
-        else:
-            logger.warning("Using mock TTS client (no API key configured)")
-            self.tts_client = MockTTSClient(tts_config)
-
-        self.tts_adapter = TTSAdapter(
-            event_bus=self.event_bus,
-            tts_client=self.tts_client,
-            config=tts_config,
-            retry_attempts=settings.tts_retry_attempts,
-        )
-
         playback_config = PlaybackConfig(
             chunk_size=settings.audio_chunk_size,
             buffer_size=settings.audio_buffer_size,
@@ -153,7 +118,7 @@ class AppCoordinator:
         # ✅ FIX 1 & 2: lock lives here inside __init__, not at module level
         self._asr_connect_lock = asyncio.Lock()
 
-        logger.info("AppCoordinator initialized with TTS support")
+        logger.info("AppCoordinator initialized with unified Omni realtime support")
 
     # ------------------------------------------------------------------ #
     async def start(self):
@@ -161,7 +126,6 @@ class AppCoordinator:
         logger.info("Starting AppCoordinator...")
 
         await self.question_trigger_engine.start()
-        await self.tts_adapter.start()
         await self.audio_playback_coordinator.start()
 
         self._audio_forward_task = asyncio.create_task(self._forward_audio_chunks())
@@ -170,14 +134,13 @@ class AppCoordinator:
         event_task = asyncio.create_task(self.process_events())
         self.tasks.append(event_task)
 
-        logger.info("AppCoordinator started with all TTS components (ASR lazy connect enabled)")
+        logger.info("AppCoordinator started with unified Omni realtime pipeline")
 
     async def stop(self):
         self.running = False
         logger.info("Stopping AppCoordinator...")
 
         await self.question_trigger_engine.stop()
-        await self.tts_adapter.stop()
         await self.audio_playback_coordinator.stop()
 
         for task in self.tasks:
@@ -189,22 +152,22 @@ class AppCoordinator:
         self._audio_forward_task = None
         self._asr_task = None
 
-        await self.asr_bridge.close()
+        await self.omni_client.close()
         logger.info("AppCoordinator stopped")
 
     # ------------------------------------------------------------------ #
     async def _consume_asr_stream(self) -> None:
         while self.running:
             try:
-                async for _ in self.asr_bridge.receive_transcription():
+                async for _ in self.omni_client.receive_transcription():
                     if not self.running:
                         return
                 if not self.running:
                     return
-                reconnected = await self.asr_bridge.reconnect()
+                reconnected = await self.omni_client.reconnect()
                 if not reconnected:
                     logger.error("ASR reconnect failed; retrying after delay")
-                    await asyncio.sleep(self.asr_bridge.reconnect_delay)
+                    await asyncio.sleep(self.omni_client.reconnect_delay)
             except asyncio.CancelledError:
                 return
             except Exception as e:
@@ -213,24 +176,24 @@ class AppCoordinator:
 
     async def _ensure_asr_ready(self) -> bool:
         # Fast path: already connected
-        if self.asr_bridge.connected:
+        if self.omni_client.connected:
             if not self._asr_task or self._asr_task.done():
                 self._asr_task = asyncio.create_task(self._consume_asr_stream())
                 self.tasks.append(self._asr_task)
             return True
 
         # ✅ FIX 2: Lock prevents multiple concurrent audio chunks all
-        # calling asr_bridge.connect() simultaneously → double-connection bug
+        # calling omni_client.connect() simultaneously → double-connection bug
         async with self._asr_connect_lock:
             # Double-check inside lock — another coroutine may have connected first
-            if self.asr_bridge.connected:
+            if self.omni_client.connected:
                 if not self._asr_task or self._asr_task.done():
                     self._asr_task = asyncio.create_task(self._consume_asr_stream())
                     self.tasks.append(self._asr_task)
                 return True
 
-            logger.info("Connecting ASR bridge on demand for incoming device audio")
-            connected = await self.asr_bridge.connect()
+            logger.info("Connecting unified Omni realtime session for incoming device audio")
+            connected = await self.omni_client.connect()
             if not connected:
                 return False
 
@@ -253,9 +216,9 @@ class AppCoordinator:
                 pass
             self._asr_task = None
 
-        if self.asr_bridge.connected:
-            logger.info("Closing ASR bridge because no audio devices are connected")
-            await self.asr_bridge.close()
+        if self.omni_client.connected:
+            logger.info("Closing Omni realtime session because no audio devices are connected")
+            await self.omni_client.close()
 
     # ------------------------------------------------------------------ #
     async def _forward_audio_chunks(self) -> None:
@@ -269,9 +232,9 @@ class AppCoordinator:
                 if not await self._ensure_asr_ready():
                     logger.error("Dropping queued audio chunk from %s: ASR unavailable", device_id)
                     continue
-                if not self.asr_bridge.validate_audio_format(audio_chunk):
+                if not self.omni_client.validate_audio_format(audio_chunk):
                     logger.warning("Audio chunk from %s has unexpected format/size", device_id)
-                await self.asr_bridge.send_audio(audio_chunk, device_id=device_id)
+                await self.omni_client.send_audio_chunk(audio_chunk, device_id=device_id)
                 self._record_audio_stat(
                     self._audio_forward_stats,
                     "Audio forward active",
@@ -535,34 +498,72 @@ class AppCoordinator:
             data={"prompt": prompt, "device_id": device_id},
         ))
 
-        result = await self.vision_adapter.analyze_image(image_bytes, prompt, req_id)
+        result = await self.omni_client.analyze_image_and_synthesize(image_bytes, prompt, req_id)
 
         if result.error:
-            logger.error(f"Vision analysis failed: {result.error}")
+            logger.error(f"Omni analysis failed: {result.error}")
             await self.event_bus.publish(Event(
                 event_type=EventType.VISION_RESULT.value,
                 timestamp=time.time(),
                 req_id=req_id,
                 data={
-                    "text":       result.text,
+                    "text": result.text,
                     "confidence": None,
-                    "device_id":  device_id,
-                    "is_error":   True,
+                    "device_id": device_id,
+                    "is_error": True,
                 },
             ))
-        else:
-            logger.info(f"Vision analysis complete: req_id={req_id}")
             await self.event_bus.publish(Event(
-                event_type=EventType.VISION_RESULT.value,
+                event_type=EventType.TTS_ERROR.value,
                 timestamp=time.time(),
                 req_id=req_id,
                 data={
-                    "text":       result.text,
-                    "confidence": result.confidence,
-                    "device_id":  device_id,
-                    "is_error":   False,
+                    "error": result.error,
+                    "error_type": "OmniRealtimeError",
+                    "device_id": device_id,
                 },
             ))
+            return
+
+        logger.info(f"Omni analysis complete: req_id={req_id}")
+        await self.event_bus.publish(Event(
+            event_type=EventType.VISION_RESULT.value,
+            timestamp=time.time(),
+            req_id=req_id,
+            data={
+                "text": result.text,
+                "confidence": None,
+                "device_id": device_id,
+                "is_error": False,
+            },
+        ))
+
+        if not result.audio_data:
+            logger.warning("No audio payload from Omni for req_id=%s", req_id)
+            await self.event_bus.publish(Event(
+                event_type=EventType.TTS_ERROR.value,
+                timestamp=time.time(),
+                req_id=req_id,
+                data={
+                    "error": "empty_audio_payload",
+                    "error_type": "OmniRealtimeError",
+                    "device_id": device_id,
+                },
+            ))
+            return
+
+        await self.event_bus.publish(Event(
+            event_type=EventType.AUDIO_READY.value,
+            timestamp=time.time(),
+            req_id=req_id,
+            data={
+                "audio_data": result.audio_data,
+                "audio_format": result.audio_format,
+                "sample_rate": result.sample_rate,
+                "duration_seconds": (len(result.audio_data) / 2) / max(result.sample_rate, 1),
+                "device_id": device_id,
+            },
+        ))
 
     # ------------------------------------------------------------------ #
     def get_event_bus(self) -> EventBus:

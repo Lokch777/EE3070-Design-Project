@@ -1,11 +1,17 @@
 /*
- * ESP32-S3 Full Firmware — Working Base + Overheat + Mutex + RAM Fix
- * BASE:    Proven working version (SPK pins 46/3/14, SHIFT_BITS=11)
- * ADDED:
- *  1. audioStreamTask → no watchdog reboot
- *  2. wsAudio Mutex → thread-safe
- *  3. WiFi TX power 17dBm → reduce heat
- *  4. RAM: JsonDoc 4096, queue 64, stacks reduced
+ * ESP32-S3-WROOM Full Firmware — Smooth TTS v3
+ *
+ * BASE: Working full firmware with websocket mutex + dual-core split
+ *
+ * NEW FIXES IN THIS BUILD:
+ *  FIX 5 — PLAYBACK_RING_BUFFER_BYTES      : 32KB  → 1MB
+ *  FIX 6 — PLAYBACK_DECODE_SCRATCH_BYTES   : 16KB  → 512KB
+ *  FIX 7 — playbackTask uses buffer-all mode (wait playback_end before start)
+ *  FIX 8 — Overflow fallback: start playback immediately at 90% ring usage
+ *
+ * BOARD TARGET:
+ *  ESP32-S3-WROOM
+ *  Speaker pins: BCK=46, WS=3, SD=14
  */
 
 #include <WiFi.h>
@@ -71,10 +77,11 @@ static const size_t   AUDIO_SAMPLES     = 1600;
 #define PCLK_GPIO_NUM   13
 
 // ===== Playback Ring Buffer =====
-#define PLAYBACK_RING_BUFFER_BYTES     32768
+#define PLAYBACK_RING_BUFFER_BYTES     1048576
 #define PLAYBACK_START_THRESHOLD_BYTES 8192
 #define PLAYBACK_IO_CHUNK_BYTES        1024
-#define PLAYBACK_DECODE_SCRATCH_BYTES  16384
+#define PLAYBACK_DECODE_SCRATCH_BYTES  524288
+#define PLAYBACK_OVERFLOW_THRESHOLD_BYTES ((PLAYBACK_RING_BUFFER_BYTES * 9) / 10)
 
 // ===== Mutex for wsAudio thread safety =====
 static SemaphoreHandle_t wsAudioMutex = nullptr;
@@ -149,6 +156,7 @@ void resetPlaybackBuffer(bool clearReqId) {
   playbackStarted = false;
   playbackEndReceived = false;
   speakerSessionActive = false;
+  accumCount = 0;
   portEXIT_CRITICAL(&playbackMux);
 
   i2s_zero_dma_buffer(I2S_PORT_SPK);
@@ -426,8 +434,9 @@ void playbackTask(void* param) {
 
     const size_t buffered = getPlaybackBufferedBytes();
     if (!playbackStarted) {
-      if (buffered >= PLAYBACK_START_THRESHOLD_BYTES ||
-          (playbackEndReceived && buffered > 0)) {
+      const bool bufferAllReady = playbackEndReceived && buffered > 0;
+      const bool overflowFallback = buffered >= PLAYBACK_OVERFLOW_THRESHOLD_BYTES;
+      if (bufferAllReady || overflowFallback) {
         playbackStarted = true;
       } else {
         vTaskDelay(pdMS_TO_TICKS(2));

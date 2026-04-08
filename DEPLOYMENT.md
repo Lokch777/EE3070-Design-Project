@@ -107,21 +107,20 @@ nano .env
 編輯 `.env` 檔案：
 
 ```bash
-# ASR Service
+# Unified Omni Realtime (single model: ASR + Vision + TTS)
+OMNI_API_KEY=your_omni_api_key_here
+OMNI_MODEL=qwen3.5-omni-plus-realtime
+OMNI_REALTIME_ENDPOINT=wss://dashscope.aliyuncs.com/api/v1/services/audio/asr
+OMNI_HTTP_ENDPOINT=https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
+
+# Optional legacy fallback keys (only needed if OMNI_API_KEY is not used)
 ASR_API_KEY=your_dashscope_api_key_here
-ASR_ENDPOINT=wss://dashscope.aliyuncs.com/api/v1/services/audio/asr
-
-# Vision Model
 VISION_API_KEY=your_vision_api_key_here
-VISION_MODEL=qwen-vl-plus
-VISION_ENDPOINT=https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
-VISION_TIMEOUT_SECONDS=8
-
-# TTS Configuration
 TTS_API_KEY=your_tts_api_key_here
-TTS_ENDPOINT=wss://dashscope.aliyuncs.com/api/v1/services/audio/tts
-TTS_VOICE=zhifeng_emo
-TTS_LANGUAGE=zh-CN
+
+# Speech Output Configuration
+TTS_VOICE=Kiki
+TTS_LANGUAGE=zh
 TTS_SPEED=1.0
 TTS_PITCH=1.0
 TTS_AUDIO_FORMAT=pcm

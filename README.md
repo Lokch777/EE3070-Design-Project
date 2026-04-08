@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![ESP32](https://img.shields.io/badge/ESP32-CAM-blue?style=for-the-badge&logo=espressif)
+![ESP32](https://img.shields.io/badge/ESP32-S3_WROOM-blue?style=for-the-badge&logo=espressif)
 ![Python](https://img.shields.io/badge/Python-3.8+-green?style=for-the-badge&logo=python)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-teal?style=for-the-badge&logo=fastapi)
 
@@ -78,8 +78,8 @@ The system follows an **event-driven architecture** with clear separation of con
 
 1. 🎤 CONTINUOUS LISTENING
    └─> ESP32 streams PCM16 audio (16kHz mono) via WebSocket
-       └─> Backend forwards to Qwen3-ASR service
-           └─> ASR returns real-time transcription
+       └─> Backend forwards to a single Qwen3.5 Omni Plus Realtime session
+           └─> Session returns real-time transcription
 
 2. 🎯 QUESTION DETECTION (NEW!)
    └─> Question Trigger Engine monitors ASR final text
@@ -94,14 +94,14 @@ The system follows an **event-driven architecture** with clear separation of con
                └─> Backend validates and stores
 
 4. 🤖 AI ANALYSIS
-   └─> Backend calls Qwen Omni Flash vision model
+   └─> Backend calls the same Qwen3.5 Omni Plus Realtime model
        └─> Sends: JPEG + user's question as context
            └─> Receives: Object description text
                └─> Broadcasts vision_result event
 
 5. 🔊 TEXT-TO-SPEECH (NEW!)
-   └─> TTS Adapter converts description to speech
-       └─> Uses Qwen TTS service (Chinese language)
+   └─> Omni realtime response includes synthesized speech
+       └─> Uses the same model session (no separate TTS service)
            └─> Generates PCM16 audio at 16kHz
                └─> Broadcasts audio_ready event
 
@@ -126,7 +126,7 @@ The system follows an **event-driven architecture** with clear separation of con
 
 | Component | Specification | Rationale |
 |-----------|--------------|-----------|
-| **Hardware** | ESP32-CAM with OV3660 camera, 8MB PSRAM | High-quality image capture with sufficient memory buffer |
+| **Hardware** | ESP32-S3-WROOM + camera + I2S mic/speaker, 8MB PSRAM | Real-time multimodal capture and playback with large buffer |
 | **Audio Format** | PCM16, 16kHz, Mono | Standard format for ASR, balances quality and bandwidth |
 | **Image Format** | JPEG, max 800x600, <200KB | Sufficient for object recognition, fast transmission |
 | **Trigger Keywords** | 4 Chinese phrases + 4 English questions | Natural language commands for diverse users |
@@ -145,10 +145,10 @@ The system follows an **event-driven architecture** with clear separation of con
 
 - **WebSocket Gateway**: Manages 4 endpoints (`/ws_audio`, `/ws_ctrl`, `/ws_camera`, `/ws_ui`) with heartbeat monitoring
 - **Event Bus**: Central message broker using asyncio queues for pub/sub pattern
-- **ASR Bridge**: Maintains persistent connection to Qwen3-ASR with auto-reconnection
+- **Omni Realtime Client**: Maintains a single persistent Qwen3.5 Omni Plus Realtime session with auto-reconnection
 - **Trigger Engine**: Keyword detection with cooldown and state management
 - **Capture Coordinator**: Orchestrates image capture with timeout handling
-- **Vision Adapter**: Abstraction layer for vision models (currently Qwen Omni Flash)
+- **Unified Model Adapter**: Single-model multimodal inference (ASR + vision + speech output)
 - **App Coordinator**: Main orchestrator coordinating all components
 
 **Communication Protocols:**
@@ -177,9 +177,9 @@ The system follows an **event-driven architecture** with clear separation of con
 - **🎤 Continuous Audio Streaming**: ESP32 captures audio via I2S microphone and streams to backend
 - **🗣️ Voice-Activated Triggers**: ASR detects Chinese trigger phrases to initiate image capture
 - **❓ Question Detection**: NEW! Detects voice questions like "describe the view", "what do I see" (English & Chinese)
-- **📸 On-Demand Image Capture**: ESP32-CAM captures JPEG images only when triggered (OV3660 camera, 8MB PSRAM)
-- **🤖 AI-Powered Vision**: Qwen Omni Flash vision model identifies objects in captured images with question context
-- **🔊 Text-to-Speech**: NEW! Converts AI descriptions to natural Chinese speech using Qwen TTS
+- **📸 On-Demand Image Capture**: ESP32-S3-WROOM captures JPEG images only when triggered (8MB PSRAM)
+- **🤖 Single-Model Reasoning**: Qwen3.5 Omni Plus Realtime handles ASR + vision understanding in one model
+- **🔊 Built-in Speech Output**: Same Omni model returns speech audio directly without separate TTS service
 - **📢 Audio Playback**: NEW! Streams audio back to ESP32 and plays through I2S speaker for visually impaired users
 - **🌐 Real-Time Web UI**: Live dashboard showing ASR transcripts, images, and AI responses
 - **🔄 Auto-Reconnection**: Robust WebSocket connections with automatic recovery
@@ -235,10 +235,9 @@ The system follows an **event-driven architecture** with clear separation of con
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| **ESP32 Device** | ESP32 + I2S Mic + ESP32-CAM | Audio/image capture and streaming |
+| **ESP32 Device** | ESP32-S3-WROOM + I2S Mic + Camera | Audio/image capture and streaming |
 | **Backend Server** | FastAPI + Python 3.8+ | WebSocket gateway, event coordination |
-| **ASR Service** | Qwen3-ASR-Flash-Realtime | Real-time speech-to-text transcription |
-| **Vision Model** | Qwen Omni Flash | Object recognition and description |
+| **Unified AI Service** | Qwen3.5-Omni-Plus-Realtime | Real-time ASR + vision + speech generation |
 | **Web UI** | HTML5 + JavaScript + WebSocket | Real-time monitoring dashboard |
 
 ---
@@ -935,7 +934,7 @@ Contributions are welcome! Please follow these steps:
 ## 🙏 Acknowledgments
 
 - **Alibaba Cloud** - DashScope API for ASR and Vision models
-- **Qwen Team** - Qwen3-ASR and Qwen Omni Flash models
+- **Qwen Team** - Qwen3.5 Omni Plus Realtime model
 - **FastAPI** - Modern web framework for Python
 - **ESP32 Community** - Hardware and firmware support
 

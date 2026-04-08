@@ -10,26 +10,34 @@ logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
-    
-    # ASR Service
-    asr_model: str = Field(default="qwen3-asr-flash-realtime", env="ASR_MODEL")
-    asr_api_key: str = Field(..., env="ASR_API_KEY")
+
+    # Unified Omni Realtime model (single-model architecture)
+    omni_model: str = Field(default="qwen3.5-omni-plus-realtime", env="OMNI_MODEL")
+    omni_api_key: Optional[str] = Field(default=None, env="OMNI_API_KEY")
+    omni_realtime_endpoint: str = Field(
+        default="wss://dashscope.aliyuncs.com/api/v1/services/audio/asr",
+        env="OMNI_REALTIME_ENDPOINT"
+    )
+    omni_http_endpoint: str = Field(
+        default="https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+        env="OMNI_HTTP_ENDPOINT"
+    )
+
+    # Legacy compatibility fields (fallback only)
+    asr_model: str = Field(default="qwen3.5-omni-plus-realtime", env="ASR_MODEL")
+    asr_api_key: Optional[str] = Field(default=None, env="ASR_API_KEY")
     asr_endpoint: str = Field(
         default="wss://dashscope.aliyuncs.com/api/v1/services/audio/asr",
         env="ASR_ENDPOINT"
     )
-    
-    # Vision Model
-    vision_api_key: str = Field(..., env="VISION_API_KEY")
-    vision_model: str = Field(default="qwen-vl-plus", env="VISION_MODEL")
+    vision_api_key: Optional[str] = Field(default=None, env="VISION_API_KEY")
+    vision_model: str = Field(default="qwen3.5-omni-plus-realtime", env="VISION_MODEL")
     vision_endpoint: str = Field(
         default="https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
         env="VISION_ENDPOINT"
     )
-    
-    # TTS Service
-    tts_model: str = Field(default="qwen3-tts-flash-realtime", env="TTS_MODEL")
-    tts_api_key: str = Field(..., env="TTS_API_KEY")
+    tts_model: str = Field(default="qwen3.5-omni-plus-realtime", env="TTS_MODEL")
+    tts_api_key: Optional[str] = Field(default=None, env="TTS_API_KEY")
     tts_endpoint: str = Field(
         default="wss://dashscope.aliyuncs.com/api/v1/services/audio/tts",
         env="TTS_ENDPOINT"
@@ -96,17 +104,19 @@ def load_settings() -> Settings:
 
 def validate_api_keys(settings: Settings) -> bool:
     """Validate that required API keys are present"""
+    if settings.omni_api_key and settings.omni_api_key != "your_omni_api_key_here":
+        logger.info("OMNI_API_KEY is configured and will be used for unified realtime session")
+        return True
+
+    # Legacy fallback
     if not settings.asr_api_key or settings.asr_api_key == "your_dashscope_api_key_here":
-        logger.error("ASR_API_KEY is not configured")
+        logger.error("OMNI_API_KEY is not configured and ASR_API_KEY fallback is missing")
         return False
-    
     if not settings.vision_api_key or settings.vision_api_key == "your_vision_api_key_here":
-        logger.error("VISION_API_KEY is not configured")
+        logger.error("OMNI_API_KEY is not configured and VISION_API_KEY fallback is missing")
         return False
-    
     if not settings.tts_api_key or settings.tts_api_key == "your_tts_api_key_here":
-        logger.error("TTS_API_KEY is not configured")
+        logger.error("OMNI_API_KEY is not configured and TTS_API_KEY fallback is missing")
         return False
-    
-    logger.info("API keys validated successfully")
+    logger.info("Legacy API keys validated successfully")
     return True
