@@ -292,7 +292,10 @@ class ESP32ASRClient {
         if (!event?.data?.image_base64 || !imageDisplay) {
             return;
         }
-        imageDisplay.innerHTML = `<img src="data:image/jpeg;base64,${event.data.image_base64}" alt="Realtime camera frame">`;
+        const img = document.createElement('img');
+        img.alt = `Realtime camera frame ${event.req_id || ''} ${this.formatTime(event.timestamp)}`.trim();
+        img.src = `data:image/jpeg;base64,${event.data.image_base64}`;
+        imageDisplay.replaceChildren(img);
         this.setText('imageFilename', `stream:${event.req_id || '--'}`);
         this.setText('imageSize', this.formatBytes(event.data.image_size || 0));
         this.setText('imageTime', this.formatTime(event.timestamp));

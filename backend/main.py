@@ -273,6 +273,12 @@ async def websocket_camera(websocket: WebSocket):
                 image_data = await websocket.receive_bytes()
 
                 if message_type in {"stream_frame", "video_frame", "frame"}:
+                    logger.debug(
+                        "Streaming frame received: req_id=%s size=%s sequence=%s",
+                        req_id,
+                        len(image_data),
+                        header.get("sequence"),
+                    )
                     await broadcast_stream_frame_to_ui(
                         req_id=req_id,
                         frame_data=image_data,
@@ -387,7 +393,8 @@ async def broadcast_stream_frame_to_ui(
     for client_id, ws in list(ui_clients.items()):
         try:
             await ws.send_json(payload)
-        except Exception:
+        except Exception as e:
+            logger.debug("Dropping UI stream client %s due to send failure: %s", client_id, e)
             disconnected.append(client_id)
 
     for client_id in disconnected:
@@ -441,6 +448,7 @@ async def forward_capture_requests_to_ctrl():
         async for event in event_bus.subscribe(EventType.CAPTURE_REQUESTED.value):
             target_device_id = event.data.get("device_id")
             message = {"type": "CAPTURE", "req_id": event.req_id, "timestamp": event.timestamp}
+            # Ask device to stream realtime frames while capture is active.
             message["stream_video"] = True
             message["stream_mode"] = "realtime"
             if "trigger_text" in event.data:
