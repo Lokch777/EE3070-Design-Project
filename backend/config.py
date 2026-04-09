@@ -23,7 +23,7 @@ class Settings(BaseSettings):
         env="OMNI_HTTP_ENDPOINT"
     )
 
-    # Legacy compatibility fields (fallback only)
+    # Legacy compatibility fields (deprecated; kept for backward compatibility)
     asr_model: str = Field(default="qwen3-asr-flash-realtime", env="ASR_MODEL")
     asr_api_key: Optional[str] = Field(default=None, env="ASR_API_KEY")
     asr_endpoint: str = Field(
@@ -109,15 +109,5 @@ def validate_api_keys(settings: Settings) -> bool:
         logger.info("OMNI_API_KEY is configured and will be used for unified realtime session")
         return True
 
-    # Legacy fallback
-    if not settings.asr_api_key or settings.asr_api_key == "your_dashscope_api_key_here":
-        logger.error("OMNI_API_KEY is not configured and ASR_API_KEY fallback is missing")
-        return False
-    if not settings.vision_api_key or settings.vision_api_key == "your_vision_api_key_here":
-        logger.error("OMNI_API_KEY is not configured and VISION_API_KEY fallback is missing")
-        return False
-    if not settings.tts_api_key or settings.tts_api_key == "your_tts_api_key_here":
-        logger.error("OMNI_API_KEY is not configured and TTS_API_KEY fallback is missing")
-        return False
-    logger.info("Legacy API keys validated successfully")
-    return True
+    logger.error("OMNI_API_KEY is required for unified Qwen3.5 Omni realtime pipeline")
+    return False

@@ -35,21 +35,7 @@ class AppCoordinator:
 
     def __init__(self, settings: Settings):
         self.settings = settings
-        key_sources = [
-            ("OMNI_API_KEY", settings.omni_api_key),
-            ("ASR_API_KEY", settings.asr_api_key),
-            ("VISION_API_KEY", settings.vision_api_key),
-            ("TTS_API_KEY", settings.tts_api_key),
-        ]
-        selected_key_source = "none"
-        omni_api_key = None
-        for source_name, key_value in key_sources:
-            if (key_value or "").strip():
-                selected_key_source = source_name
-                omni_api_key = key_value
-                break
-        if selected_key_source != "OMNI_API_KEY":
-            logger.warning("Unified Omni auth is using legacy fallback credentials")
+        omni_api_key = (settings.omni_api_key or "").strip()
 
         self.event_bus = EventBus(buffer_size=settings.event_buffer_size)
 
@@ -65,7 +51,7 @@ class AppCoordinator:
         self.error_handler = ErrorHandler(event_bus=self.event_bus)
 
         self.omni_client = OmniRealtimeClient(
-            api_key=omni_api_key or "",
+            api_key=omni_api_key,
             model=settings.omni_model,
             event_bus=self.event_bus,
             realtime_endpoint=settings.omni_realtime_endpoint,

@@ -13,6 +13,7 @@ import logging
 import time
 import json
 import asyncio
+import base64
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -42,6 +43,7 @@ event_bus = app_coordinator.get_event_bus()
 
 connected_clients: Dict[str, ConnectionState] = {}
 ctrl_clients: Dict[str, WebSocket] = {}
+ui_clients: Dict[str, WebSocket] = {}
 capture_forward_task: Optional[asyncio.Task] = None
 
 HEARTBEAT_INTERVAL = 30
@@ -263,14 +265,24 @@ async def websocket_camera(websocket: WebSocket):
             try:
                 header_data = await websocket.receive_text()
                 header      = json.loads(header_data)
+                message_type = (header.get("type") or "capture").strip().lower()
                 req_id      = header.get("req_id", f"unknown-{int(time.time())}")
                 expected_size = header.get("size", 0)
 
                 conn_state.last_heartbeat = time.time()
+                image_data = await websocket.receive_bytes()
+
+                if message_type in {"stream_frame", "video_frame", "frame"}:
+                    await broadcast_stream_frame_to_ui(
+                        req_id=req_id,
+                        frame_data=image_data,
+                        frame_format=(header.get("format") or "jpeg"),
+                        frame_sequence=header.get("sequence"),
+                    )
+                    continue
+
                 logger.info(f"Receiving image: req_id={req_id}, size={expected_size}")
                 app_coordinator.capture_coordinator.mark_capture_started(req_id, expected_size)
-
-                image_data = await websocket.receive_bytes()
 
                 timestamp = int(time.time() * 1000)
                 filename  = f"{req_id}_{timestamp}.jpg"
@@ -323,6 +335,7 @@ async def websocket_ui(websocket: WebSocket):
         metadata={},
     )
     connected_clients[client_id] = conn_state
+    ui_clients[client_id] = websocket
     logger.info(f"Web UI connected: {client_id}")
 
     heartbeat_task = asyncio.create_task(send_heartbeat(websocket, client_id))
@@ -344,6 +357,41 @@ async def websocket_ui(websocket: WebSocket):
     finally:
         heartbeat_task.cancel()
         event_task.cancel()
+        ui_clients.pop(client_id, None)
+        connected_clients.pop(client_id, None)
+
+
+async def broadcast_stream_frame_to_ui(
+    req_id: str,
+    frame_data: bytes,
+    frame_format: str = "jpeg",
+    frame_sequence: Optional[int] = None,
+):
+    if not frame_data or not ui_clients:
+        return
+
+    payload = {
+        "event_type": "video_frame",
+        "timestamp": time.time(),
+        "req_id": req_id,
+        "data": {
+            "image_base64": base64.b64encode(frame_data).decode("utf-8"),
+            "image_size": len(frame_data),
+            "format": frame_format,
+            "sequence": frame_sequence,
+            "is_stream": True,
+        },
+    }
+
+    disconnected = []
+    for client_id, ws in list(ui_clients.items()):
+        try:
+            await ws.send_json(payload)
+        except Exception:
+            disconnected.append(client_id)
+
+    for client_id in disconnected:
+        ui_clients.pop(client_id, None)
         connected_clients.pop(client_id, None)
 
 
@@ -393,6 +441,8 @@ async def forward_capture_requests_to_ctrl():
         async for event in event_bus.subscribe(EventType.CAPTURE_REQUESTED.value):
             target_device_id = event.data.get("device_id")
             message = {"type": "CAPTURE", "req_id": event.req_id, "timestamp": event.timestamp}
+            message["stream_video"] = True
+            message["stream_mode"] = "realtime"
             if "trigger_text" in event.data:
                 message["trigger_text"] = event.data["trigger_text"]
             if "retry_count" in event.data:

@@ -172,6 +172,9 @@ class ESP32ASRClient {
                 this.displayImage(event);
                 this.appendLog('IMAGE', `${event.data.filename || 'capture'} (${this.formatBytes(event.data.image_size || 0)})`, event.timestamp, true);
                 break;
+            case 'video_frame':
+                this.displayVideoFrame(event);
+                break;
             case 'vision_result':
                 this.stats.vision += 1;
                 this.last.visionText = this.truncateText(event.data.text || '--', 18);
@@ -282,6 +285,17 @@ class ESP32ASRClient {
             ${event.data.confidence ? `<p style="margin-top: 10px; color: #666;">信心度: ${(event.data.confidence * 100).toFixed(1)}%</p>` : ''}
             <p class="event-req-id" style="margin-top: 10px;">ID: ${event.req_id}</p>
         `;
+    }
+
+    displayVideoFrame(event) {
+        const imageDisplay = document.getElementById('imageDisplay');
+        if (!event?.data?.image_base64 || !imageDisplay) {
+            return;
+        }
+        imageDisplay.innerHTML = `<img src="data:image/jpeg;base64,${event.data.image_base64}" alt="Realtime camera frame">`;
+        this.setText('imageFilename', `stream:${event.req_id || '--'}`);
+        this.setText('imageSize', this.formatBytes(event.data.image_size || 0));
+        this.setText('imageTime', this.formatTime(event.timestamp));
     }
 
     displayError(event) {
