@@ -196,7 +196,12 @@
       <section class="card card--snapshot" aria-label="最新快照">
         <div class="card-header">
           <h2>最新快照</h2>
-          <span class="card-chip">Camera</span>
+          <span class="card-chip" id="cameraModeChip">Camera</span>
+        </div>
+<!-- Phase 2: Live stream indicator -->
+        <div class="stream-status" id="streamStatus" style="display:none">
+          <span class="stream-dot" id="streamDot"></span>
+          <span id="streamFps">1 FPS</span>
         </div>
         <div class="snapshot-frame" id="snapshotFrame">
           <span class="snapshot-empty" id="snapshotEmpty">等待拍照…</span>

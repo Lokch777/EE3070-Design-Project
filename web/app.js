@@ -112,7 +112,10 @@
     // Devices
     audioOnline: false,
     cameraOnline: false,
-
+    // Add after `cameraOnline: false,`: 
+    cameraStreaming: false,    // Phase 2: continuous stream active
+    cameraFps: 0,              // Phase 2: current FPS
+    omniSession: null,         // Phase 2: Omni session info
     // Vision
     visionHtml: '',
     visionReqId: '',
@@ -124,6 +127,26 @@
     snapTime: '--'
   };
 
+// Add after the Snapshot section rendering:
+// ── Phase 2: Camera streaming status ─────────────────────
+   const streamStatus = $('streamStatus');
+   const streamDot = $('streamDot');
+   const streamFps = $('streamFps');
+   const camChip = $('cameraModeChip');
+
+   if (streamStatus && camChip) {
+     if (s.cameraStreaming) {
+       streamStatus.style.display = 'flex';
+       streamDot.classList.add('active');
+       streamFps.textContent = `${s.cameraFps} FPS`;
+       camChip.textContent = 'Live Stream';
+       camChip.style.background = 'var(--accent-soft)';
+     } else {
+       streamStatus.style.display = 'none';
+       camChip.textContent = 'Camera';
+       camChip.style.background = '';
+     }
+   }
   const store = reactiveProxy(_state);
 
   function onStoreChange(fn) { _listeners.add(fn); }
@@ -663,6 +686,30 @@
       case 'question_detected':
         appendLog('QUESTION', truncate(ev.data.question_text, 60), ev.timestamp);
         break;
+
+
+      /* ── Phase 2: Camera Streaming ── */
+      case 'camera_stream_started':
+        store.cameraStreaming = true;
+        store.cameraFps = ev.data.fps || 1;
+        appendLog('CAMERA', `Stream started @ ${store.cameraFps} FPS`, ev.timestamp);
+        break;
+
+      case 'camera_stream_stopped':
+        store.cameraStreaming = false;
+        appendLog('CAMERA', 'Stream stopped', ev.timestamp);
+        break;
+
+      case 'camera_frame_received':
+        // Update snapshot immediately for live preview
+       if (ev.data.filename) {
+          store.snapSrc = `${getBaseUrl()}/images/${encodeURIComponent(ev.data.filename)}?t=${Date.now()}`;
+          store.snapFilename = ev.data.filename;
+        }
+        store.snapSize = fmtBytes(ev.data.image_size || 0);
+        store.snapTime = fmtTime(ev.timestamp);
+        break;
+
 
       /* ── Error ── */
       case 'error':
