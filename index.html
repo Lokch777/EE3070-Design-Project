@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="ESP32 AI 語音視覺辨識助手即時控制台">
+  <meta name="theme-color" content="#c87a2e">
+  <title>ESP32 AI Assistant</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Toast container (managed by JS) -->
+  <div class="toast-container" id="toastContainer" aria-live="polite" aria-label="通知訊息"></div>
+
+  <div class="app-shell">
+    <!-- ═══ Header ═══ -->
+    <header class="header" role="banner">
+      <div class="header-brand">
+        <div class="brand-logo" aria-hidden="true">E32</div>
+        <div class="brand-text">
+          <span class="brand-eyebrow">ASR · Vision · Edge AI</span>
+          <h1>ESP32 AI 助手</h1>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="conn-badge" id="connBadge" data-status="connecting"
+             role="status" aria-label="WebSocket 連線狀態">
+          <span class="conn-dot" aria-hidden="true"></span>
+          <span id="connText">連線中…</span>
+        </div>
+        <button class="theme-toggle" id="themeToggle"
+                aria-label="切換深色/淺色模式" title="切換主題">
+          <span class="icon-sun" aria-hidden="true">☀</span>
+          <span class="icon-moon" aria-hidden="true">☾</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ═══ Dashboard ═══ -->
+    <main class="dashboard" role="main" aria-label="主控台">
+
+      <!-- ASR — full width -->
+      <section class="card card--asr" aria-label="語音辨識">
+        <div class="card-header">
+          <h2>語音辨識</h2>
+          <span class="card-chip" id="asrChip">Idle</span>
+        </div>
+        <div class="asr-box" id="asrBox" data-listening="false">
+          <div class="mic-indicator" id="micIndicator" data-active="false"
+               role="img" aria-label="麥克風狀態">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/>
+              <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          </div>
+          <div class="asr-text empty" id="asrText" aria-live="polite">等待語音輸入…</div>
+        </div>
+      </section>
+
+      <!-- Pipeline latency — full width -->
+      <section class="card card--pipeline" aria-label="處理管線延遲">
+        <div class="card-header">
+          <h2>處理管線</h2>
+          <span class="card-chip" id="pipelineChip">--</span>
+        </div>
+        <div class="pipeline" role="list" aria-label="管線階段">
+          <div class="pipeline-stage" data-stage="asr" data-active="false" role="listitem">
+            <span class="pipeline-dot" aria-hidden="true"></span>
+            <span>ASR</span>
+            <span class="pipeline-ms" id="pMs_asr">--</span>
+          </div>
+          <div class="pipeline-stage" data-stage="trigger" data-active="false" role="listitem">
+            <span class="pipeline-dot" aria-hidden="true"></span>
+            <span>Trigger</span>
+            <span class="pipeline-ms" id="pMs_trigger">--</span>
+          </div>
+          <div class="pipeline-stage" data-stage="capture" data-active="false" role="listitem">
+            <span class="pipeline-dot" aria-hidden="true"></span>
+            <span>Capture</span>
+            <span class="pipeline-ms" id="pMs_capture">--</span>
+          </div>
+          <div class="pipeline-stage" data-stage="vision" data-active="false" role="listitem">
+            <span class="pipeline-dot" aria-hidden="true"></span>
+            <span>Vision</span>
+            <span class="pipeline-ms" id="pMs_vision">--</span>
+          </div>
+          <div class="pipeline-stage" data-stage="tts" data-active="false" role="listitem">
+            <span class="pipeline-dot" aria-hidden="true"></span>
+            <span>TTS</span>
+            <span class="pipeline-ms" id="pMs_tts">--</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Stats -->
+      <section class="card card--stats" aria-label="系統統計">
+        <div class="card-header">
+          <h2>統計數據</h2>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span class="stat-label">ASR Final</span>
+            <span class="stat-value" id="sAsrFinal">0</span>
+            <span class="stat-sub" id="sAsrPartial">partial: 0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">觸發次數</span>
+            <span class="stat-value" id="sTriggers">0</span>
+            <span class="stat-sub" id="sLastKeyword">--</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">影像接收</span>
+            <span class="stat-value" id="sImages">0</span>
+            <span class="stat-sub" id="sImageSize">--</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">辨識次數</span>
+            <span class="stat-value" id="sVision">0</span>
+            <span class="stat-sub" id="sVisionConf">--</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">系統事件</span>
+            <span class="stat-value" id="sTotalEvents">0</span>
+            <span class="stat-sub" id="sLastEvent">--</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">儲存影像</span>
+            <span class="stat-value" id="sImagesStored">0</span>
+            <span class="stat-sub" id="sHealthStatus">--</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Controls -->
+      <section class="card card--controls" aria-label="控制面板">
+        <div class="card-header">
+          <h2>控制台</h2>
+        </div>
+        <div class="controls-group">
+          <!-- TTS progress -->
+          <div class="tts-bar-wrap">
+            <div class="tts-bar-label">
+              <span class="speaker-icon">
+                <span class="speaker-indicator" id="speakerDot" data-active="false" aria-hidden="true"></span>
+                TTS 播放
+              </span>
+              <span id="ttsPercent">--</span>
+            </div>
+            <div class="tts-bar-track" role="progressbar" aria-label="TTS 播放進度"
+                 aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+              <div class="tts-bar-fill" id="ttsBarFill"></div>
+            </div>
+          </div>
+
+          <!-- Action buttons -->
+          <div class="btn-row">
+            <button class="btn btn--danger" id="btnStopTts" disabled
+                    aria-label="停止 TTS 播放">
+              ■ 停止 TTS
+            </button>
+            <button class="btn" id="btnClearLog" aria-label="清除系統日誌">
+              清除 Log
+            </button>
+          </div>
+
+          <!-- Device status -->
+          <div class="device-status-row">
+            <div class="device-pill" id="devAudio" data-online="false">
+              <span class="d-dot" aria-hidden="true"></span>
+              Audio
+            </div>
+            <div class="device-pill" id="devCamera" data-online="false">
+              <span class="d-dot" aria-hidden="true"></span>
+              Camera
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Events -->
+      <section class="card card--events" aria-label="觸發事件列表">
+        <div class="card-header">
+          <h2>觸發事件</h2>
+          <span class="card-chip">最新 20 筆</span>
+        </div>
+        <div class="events-scroll" id="eventsList" role="log" aria-label="事件列表">
+          <p class="events-empty" id="eventsEmpty">尚無觸發事件</p>
+        </div>
+      </section>
+
+      <!-- Snapshot -->
+      <section class="card card--snapshot" aria-label="最新快照">
+        <div class="card-header">
+          <h2>最新快照</h2>
+          <span class="card-chip" id="cameraModeChip">Camera</span>
+        </div>
+<!-- Phase 2: Live stream indicator -->
+        <div class="stream-status" id="streamStatus" style="display:none">
+          <span class="stream-dot" id="streamDot"></span>
+          <span id="streamFps">1 FPS</span>
+        </div>
+        <div class="snapshot-frame" id="snapshotFrame">
+          <span class="snapshot-empty" id="snapshotEmpty">等待拍照…</span>
+        </div>
+        <div class="snapshot-meta">
+          <span id="snapFilename">--</span>
+          <span id="snapSize">--</span>
+          <span id="snapTime">--</span>
+        </div>
+      </section>
+
+      <!-- Vision result -->
+      <section class="card card--vision" aria-label="辨識結果">
+        <div class="card-header">
+          <h2>辨識結果</h2>
+          <span class="card-chip">AI</span>
+        </div>
+        <div class="vision-box" id="visionBox">
+          <p class="vision-empty" id="visionEmpty">等待辨識結果…</p>
+        </div>
+      </section>
+
+      <!-- System log -->
+      <section class="card card--log" aria-label="系統日誌">
+        <div class="card-header">
+          <h2>系統 Log</h2>
+          <span class="card-chip">Terminal</span>
+        </div>
+        <div class="log-terminal" id="logTerminal" role="log" aria-label="系統紀錄">
+          <p class="log-empty" id="logEmpty">尚無系統紀錄</p>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ═══ Footer ═══ -->
+    <footer class="footer" role="contentinfo">
+      <div class="footer-brand">
+        <span>ESP32 AI Assistant Dashboard</span>
+        <span class="footer-version">v2.0.0</span>
+      </div>
+      <span>Edge-ready · Secure link</span>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+<script data-pplx-inline-edit>
+(function(){
+  if(window===window.top)return;
+  function inlineAll(orig,clone){
+    if(orig.nodeType!==1)return;
+    try{
+      var cs=getComputedStyle(orig);
+      var t='';
+      for(var i=0;i<cs.length;i++){t+=cs[i]+':'+cs.getPropertyValue(cs[i])+';';}
+      clone.style.cssText=t;
+    }catch(e){}
+    var oc=orig.children,cc=clone.children;
+    for(var j=0;j<oc.length&&j<cc.length;j++){inlineAll(oc[j],cc[j]);}
+  }
+  function stripExternal(clone){
+    var imgs=clone.querySelectorAll('img');
+    for(var i=0;i<imgs.length;i++){
+      var s=imgs[i].getAttribute('src');
+      if(s&&!s.startsWith('data:'))imgs[i].removeAttribute('src');
+    }
+    var all=clone.querySelectorAll('*');
+    for(var i=0;i<all.length;i++){
+      var st=all[i].style.cssText;
+      if(st&&st.indexOf('url(')>=0){
+        all[i].style.cssText=st.replace(/url\(["']?(?!data:)[^)"']*["']?\)/gi,'none');
+      }
+    }
+  }
+  window.addEventListener('message',function(e){
+    if(!e.data||e.data.type!=='INLINE_EDIT_CAPTURE_REQUEST')return;
+    var scrollX=window.scrollX||window.pageXOffset||0;
+    var scrollY=window.scrollY||window.pageYOffset||0;
+    var w=window.innerWidth,h=window.innerHeight;
+    try{
+      var clone=document.documentElement.cloneNode(true);
+      var rm=clone.querySelectorAll('script,link[rel="stylesheet"],style');
+      for(var i=0;i<rm.length;i++){rm[i].remove();}
+      inlineAll(document.documentElement,clone);
+      stripExternal(clone);
+      var html=new XMLSerializer().serializeToString(clone);
+      var svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'" height="'+h+'">'
+        +'<foreignObject width="100%" height="100%">'
+        +'<div xmlns="http://www.w3.org/1999/xhtml" style="width:'+w+'px;height:'+h+'px;overflow:hidden">'
+        +'<div style="transform:translate(-'+scrollX+'px,-'+scrollY+'px);transform-origin:top left">'
+        +html+'</div></div></foreignObject></svg>';
+      var svgUrl='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+      var img=new Image();
+      img.onload=function(){
+        var c=document.createElement('canvas');c.width=w;c.height=h;
+        c.getContext('2d').drawImage(img,0,0);
+        window.parent.postMessage({type:'INLINE_EDIT_SCREENSHOT_RESULT',dataUrl:c.toDataURL('image/png'),scrollX:scrollX,scrollY:scrollY},'*');
+      };
+      img.onerror=function(){
+        window.parent.postMessage({type:'INLINE_EDIT_SCREENSHOT_RESULT',dataUrl:null,scrollX:scrollX,scrollY:scrollY},'*');
+      };
+      img.src=svgUrl;
+    }catch(err){
+      window.parent.postMessage({type:'INLINE_EDIT_SCREENSHOT_RESULT',dataUrl:null,scrollX:scrollX,scrollY:scrollY},'*');
+    }
+  });
+})();
+</script></body>
+</html>
