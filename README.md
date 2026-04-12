@@ -250,7 +250,7 @@ The system follows an **event-driven architecture** with clear separation of con
 - **Python 3.8+** installed
 - **Git** installed
 - **AWS EC2 instance** (Ubuntu 20.04+ recommended) or local machine
-- **DashScope API Key** (for Qwen ASR and Vision models)
+- **DashScope API Key** (required for ASR; in Omni mode this is the only required API key)
 - **ESP32 device** with microphone and camera (optional for testing)
 
 ### 1️⃣ Clone Repository
@@ -286,44 +286,27 @@ nano .env  # Edit and add your API keys
 **Required Environment Variables** (`.env` file):
 
 ```env
-# API Keys
-ASR_API_KEY=your_dashscope_asr_api_key_here
-VISION_API_KEY=your_qwen_vision_api_key_here
+# Omni Realtime Mode
+OMNI_MODE=true
+OMNI_MODEL=qwen3.5-omni-plus-realtime-2026-03-15
+OMNI_VOICE=Cherry
+
+# Required API key (DashScope)
+ASR_API_KEY=your_dashscope_api_key_here
+
+# Optional API keys (used when not in Omni mode)
+VISION_API_KEY=your_vision_api_key_here
+TTS_API_KEY=your_tts_api_key_here
 
 # Server Configuration
 SERVER_HOST=0.0.0.0
-SERVER_PORT=8000
+SERVER_PORT=8080
 LOG_LEVEL=INFO
 
-# ASR Endpoint
-ASR_ENDPOINT=wss://dashscope.aliyuncs.com/api/v1/services/audio/asr
-
-# Vision Configuration
-VISION_MODEL=qwen-vl-plus
-VISION_ENDPOINT=https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
-VISION_TIMEOUT_SECONDS=8
-
-# TTS Configuration (NEW!)
-TTS_API_KEY=your_tts_api_key_here
-TTS_ENDPOINT=wss://dashscope.aliyuncs.com/api/v1/services/audio/tts
-TTS_VOICE=zhifeng_emo
-TTS_LANGUAGE=zh-CN
-TTS_SPEED=1.0
-TTS_PITCH=1.0
-TTS_AUDIO_FORMAT=pcm
-TTS_SAMPLE_RATE=16000
-TTS_TIMEOUT_SECONDS=5.0
-TTS_RETRY_ATTEMPTS=1
-
-# Trigger Configuration (NEW!)
-TRIGGER_ENGLISH_PHRASES=describe the view,what do I see,what's in front of me,tell me what you see
-TRIGGER_CHINESE_PHRASES=描述一下景象,我看到什麼,前面是什麼,告訴我你看到什麼
-TRIGGER_FUZZY_THRESHOLD=0.85
-
-# Audio Playback Configuration (NEW!)
-AUDIO_CHUNK_SIZE=4096
-AUDIO_BUFFER_SIZE=16384
-AUDIO_STREAM_TIMEOUT=10.0
+# Endpoints
+ASR_ENDPOINT=wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference
+VISION_ENDPOINT=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+TTS_ENDPOINT=wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime
 ```
 
 ### 3️⃣ Start Backend Server
@@ -809,16 +792,19 @@ mypy backend/
 All sensitive configuration is stored in `.env` file (never commit this file):
 
 ```env
-# Required
+# Required (Omni mode)
 ASR_API_KEY=sk-xxxxx
+
+# Required in non-Omni mode
 VISION_API_KEY=sk-xxxxx
 TTS_API_KEY=sk-xxxxx
 
 # Optional (with defaults)
 SERVER_HOST=0.0.0.0
-SERVER_PORT=8000
+SERVER_PORT=8080
 LOG_LEVEL=INFO
-VISION_MODEL=qwen-vl-plus
+OMNI_MODE=true
+OMNI_MODEL=qwen3.5-omni-plus-realtime-2026-03-15
 ```
 
 ---
@@ -881,7 +867,7 @@ taskkill /PID <PID> /F  # Windows
 **Problem**: No ASR transcription appearing
 
 **Solution**:
-1. Verify `ASR_API_KEY` is set correctly
+1. Verify `ASR_API_KEY` is set correctly (`VISION_API_KEY` and `TTS_API_KEY` are also required when `OMNI_MODE=false`)
 2. Check backend logs for ASR errors
 3. Ensure ESP32 is streaming audio
 
