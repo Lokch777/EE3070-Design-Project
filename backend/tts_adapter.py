@@ -139,8 +139,8 @@ class TTSAdapter:
             first = cleaned
 
         # Hard cap length to keep response short and fast.
-        if len(first) > 22:
-            first = first[:22]
+        if len(first) > 500:
+            first = first[:500]
 
         # Ensure sentence ending for natural prosody.
         if first and first[-1] not in "。！？!?":

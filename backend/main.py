@@ -428,10 +428,18 @@ async def forward_capture_requests_to_ctrl():
         pass
 
 
-if Path("../web").exists():
-    app.mount("/web", StaticFiles(directory="../web"), name="web")
+
+# ── 靜態檔案掛載（順序很重要！）─────────────────────────
+
+# 1️⃣ 先掛載 /images（避免被 /web 路由攔截）
 if IMAGES_DIR.exists():
     app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
+
+# 2️⃣ 再掛載前端於 /web 子路徑（情況 A：web 在 backend 上層）
+#    ✅ 加上 html=True 啟用 index.html 降級，支援前端路由
+if Path("../web").exists():
+    app.mount("/web", StaticFiles(directory="../web", html=True), name="web")
+
 
 if __name__ == "__main__":
     import uvicorn

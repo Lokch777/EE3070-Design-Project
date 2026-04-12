@@ -30,7 +30,7 @@ class QwenOmniAdapter(VisionLLMAdapter):
     def __init__(
         self,
         api_key: str,
-        model: str = "qwen-vl-plus",
+        model: str = "qwen3-vl-flash-2026-01-22",
         endpoint: str = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
         timeout_seconds: int = 8,
     ):
@@ -59,12 +59,12 @@ class QwenOmniAdapter(VisionLLMAdapter):
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
         question = (prompt or "").strip()
-        if len(question) > 24:
-            question = question[:24]
+        if len(question) > 500:
+            question = question[:500]
 
         full_prompt = (
             f"使用者問題：{question}\n"
-            "請用繁體中文，1句、20字內，只描述最明顯物件。"
+            "請用繁體中文，2句、40字內，只描述明顯物件。"
             "不要推測，不要建議。"
         )
 
@@ -86,7 +86,7 @@ class QwenOmniAdapter(VisionLLMAdapter):
                     ],
                 }
             ],
-            "max_tokens": 40,
+            "max_tokens": 1000,
             "temperature": 0.1,
         }
 

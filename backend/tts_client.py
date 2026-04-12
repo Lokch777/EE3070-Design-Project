@@ -16,7 +16,6 @@ from pydub import AudioSegment
 
 logger = logging.getLogger(__name__)
 
-# 新加坡 endpoint（你用 dashscope-intl API key）
 QWEN_TTS_WSS_URL = "wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime"
 
 
@@ -24,15 +23,22 @@ QWEN_TTS_WSS_URL = "wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime"
 class TTSConfig:
     api_key: str
     endpoint: str
-    model: str         = "qwen3-tts-flash-realtime"
-    voice: str         = "Cherry"    # Kiki 未確認存在，先用 Cherry，或是你想測試英文可換 Jennifer
+    model: str         = "qwen3-tts-flash-realtime-2025-11-27"
+    voice: str         = "Cherry"
     language: str      = "Chinese"
     sample_rate: int   = 16000
-    timeout_seconds: float = 15.0
+    timeout_seconds: float = 30.0
     speed: float       = 1.0
     pitch: float       = 1.0
-    audio_format: str = "pcm"
-    fallback_max_chars: int = 12
+    audio_format: str  = "pcm"
+    fallback_max_chars: int = 0
+    # [FIX B] Trailing silence in ms — small safety pad for I2S DMA drain.
+    # FIX 11/12/13 on ESP32 now properly handle DMA drain timing, so we
+    # no longer need the massive 5000ms (160KB!) pad. 500ms is sufficient
+    # to cover any edge cases and keeps the audio payload ~10x smaller.
+    # 500ms = 16000 * 2 * 0.5 = 16000 bytes of zero-padding.
+    trailing_silence_ms: int = 500
+
 
 class TTSError(Exception):
     pass
@@ -42,7 +48,7 @@ class TTSError(Exception):
 class _AudioCollector(QwenTtsRealtimeCallback):
     def __init__(self):
         self.audio_chunks: list[bytes] = []
-        self.done_event  = threading.Event()   # thread-safe
+        self.done_event  = threading.Event()
         self.error: Optional[str] = None
 
     def on_open(self) -> None:
@@ -59,7 +65,6 @@ class _AudioCollector(QwenTtsRealtimeCallback):
                     self.audio_chunks.append(base64.b64decode(audio_b64))
 
             elif event_type == "response.done":
-                # commit 模式：每次 commit 完成後觸發
                 logger.debug("[TTS] response.done → set done")
                 self.done_event.set()
 
@@ -102,16 +107,38 @@ class TTSClient:
         logger.info(f"[TTS] Ready: model={self.config.model} voice={self.config.voice}")
 
     async def convert_to_speech(self, text: str) -> bytes:
+        """
+        Convert text to PCM bytes.
+        [FIX B] Appends trailing_silence_ms of silence at the end so the
+        ESP32 I2S DMA fully drains before playback_complete fires.
+        Without this, the last 2-4 syllables are cut off by i2s_zero_dma_buffer().
+        """
         if "qwen" in self.config.model.lower():
             try:
-                return await self._convert_qwen_realtime(text)
+                pcm = await self._convert_qwen_realtime(text)
             except Exception as e:
                 logger.error(
                     f"[TTS] Qwen failed ({type(e).__name__}: {e}), fallback gTTS",
-                    exc_info=True
+                    exc_info=True,
                 )
-                return await self._convert_gtts(text)
-        return await self._convert_gtts(text)
+                pcm = await self._convert_gtts(text)
+        else:
+            pcm = await self._convert_gtts(text)
+
+        # [FIX B] Append trailing silence
+        # Prevents I2S DMA from being zeroed while still playing last words.
+        # Formula: sample_rate × 2 bytes × (ms / 1000)
+        if self.config.trailing_silence_ms > 0:
+            silence_bytes = int(
+                self.config.sample_rate * self.config.trailing_silence_ms / 1000
+            ) * 2  # 16-bit = 2 bytes per sample
+            pcm = pcm + bytes(silence_bytes)
+            logger.debug(
+                f"[TTS] Appended {self.config.trailing_silence_ms}ms trailing silence "
+                f"({silence_bytes} bytes)"
+            )
+
+        return pcm
 
     async def _convert_qwen_realtime(self, text: str) -> bytes:
         logger.info(f"[TTS Qwen] voice={self.config.voice}: {text[:40]}...")
@@ -122,25 +149,22 @@ class TTSClient:
             client = QwenTtsRealtime(
                 model=self.config.model,
                 callback=collector,
-                url=QWEN_TTS_WSS_URL       # ← 必須傳入
+                url=QWEN_TTS_WSS_URL,
             )
             client.connect()
 
-            # 用 sample_rate int，唔用 AudioFormat enum
             client.update_session(
                 voice=self.config.voice,
-                sample_rate=self.config.sample_rate,   # ← 16000
+                sample_rate=self.config.sample_rate,
                 mode="commit",
-                language_type=self.config.language
+                language_type=self.config.language,
             )
 
             client.append_text(text)
             client.commit()
 
-            # 等 response.done（commit 模式）
             completed = collector.wait_for_done(timeout=self.config.timeout_seconds)
 
-            # 🚀 終極防護罩：忽略 SDK 關閉連線時的 Exception，保住我們已經拿到的音檔！
             try:
                 client.finish()
                 client.close()
@@ -177,20 +201,26 @@ class TTSClient:
             mp3_buf = io.BytesIO()
             tts.write_to_fp(mp3_buf)
             mp3_buf.seek(0)
-            audio = (AudioSegment
-                     .from_file(mp3_buf, format="mp3")
-                     .set_channels(1)
-                     .set_frame_rate(self.config.sample_rate)
-                     .set_sample_width(2))
+            audio = (
+                AudioSegment.from_file(mp3_buf, format="mp3")
+                .set_channels(1)
+                .set_frame_rate(self.config.sample_rate)
+                .set_sample_width(2)
+            )
             pcm_buf = io.BytesIO()
             audio.export(pcm_buf, format="s16le")
             return pcm_buf.getvalue()
 
         return await asyncio.to_thread(_generate)
 
-    async def disconnect(self): pass
-    async def __aenter__(self): return self
-    async def __aexit__(self, *args): pass
+    async def disconnect(self):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        pass
 
 
 # ── Mock TTS Client ────────────────────────────────────────
@@ -207,6 +237,11 @@ class MockTTSClient:
         duration_sec = max(1.0, len(text) * 0.05)
         return bytes(int(self._sample_rate * 2 * duration_sec))
 
-    async def disconnect(self): pass
-    async def __aenter__(self): return self
-    async def __aexit__(self, *args): pass
+    async def disconnect(self):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        pass
