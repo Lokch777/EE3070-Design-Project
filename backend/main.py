@@ -3,7 +3,7 @@
 #   1. on_event → lifespan (deprecation removed)
 #   2. unregister_audio_device passes websocket object (stale unregister fix)
 #   3. Duplicate del in ws_camera finally removed
-
+from backend.omni_coordinator import OmniCoordinator
 from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,7 +37,13 @@ except Exception as e:
 IMAGES_DIR = Path("images")
 IMAGES_DIR.mkdir(exist_ok=True)
 
-app_coordinator = AppCoordinator(settings)
+# ── Dual-mode: Omni or Batch ────────────────────────────────
+if getattr(settings, 'omni_enabled', False):
+    logger.info("═══ OMNI MODE ENABLED ═══ Using OmniCoordinator")
+    app_coordinator = OmniCoordinator(settings)
+else:
+    logger.info("═══ BATCH MODE ═══ Using AppCoordinator")
+    app_coordinator = AppCoordinator(settings)
 event_bus = app_coordinator.get_event_bus()
 
 connected_clients: Dict[str, ConnectionState] = {}
@@ -102,7 +108,12 @@ async def health_check():
         "images_stored":          len(list(IMAGES_DIR.glob("*.jpg"))),
         "event_bus_stats":        event_bus.get_stats(),
     }
-
+@app.get("/api/omni_status")
+async def omni_status():
+    """Omni session stats (returns 404 in batch mode)."""
+    if not hasattr(app_coordinator, 'get_omni_stats'):
+        return JSONResponse(status_code=404, content={"error": "Not in Omni mode"})
+    return app_coordinator.get_omni_stats()
 
 @app.get("/api/history")
 async def get_history(limit: int = 20, event_type: Optional[str] = None):
@@ -186,6 +197,15 @@ async def websocket_audio(websocket: WebSocket):
 
                 if message.get("type") == "pong":
                     conn_state.last_heartbeat = time.time()
+                
+                elif message.get("type") == "stop_tts":
+                    # In Omni mode, cancel the current response
+                    if hasattr(app_coordinator, 'omni'):
+                        await app_coordinator.omni.cancel_response()
+                        # Also tell ESP32 to stop playback
+                        if hasattr(app_coordinator, '_send_stop_playback'):
+                            await app_coordinator._send_stop_playback()
+                        logger.info("UI stop_tts → Omni response cancelled")
                 else:
                     await app_coordinator.on_audio_control_message(device_id, message)
 
@@ -243,70 +263,86 @@ async def websocket_ctrl(websocket: WebSocket):
         connected_clients.pop(client_id, None)
 
 
+
+
 @app.websocket("/ws_camera")
 async def websocket_camera(websocket: WebSocket):
     await websocket.accept()
     client_id = f"esp32_camera_{id(websocket)}"
+    # 🌟 新增：取得 device_id，這樣才能把圖片對應給正確的設備
+    device_id = websocket.query_params.get("device_id", "default")
 
     conn_state = ConnectionState(
         conn_id=client_id,
         conn_type=ConnectionType.ESP32_CAMERA.value,
         connected_at=time.time(),
         last_heartbeat=time.time(),
-        metadata={},
+        metadata={"device_id": device_id},
     )
     connected_clients[client_id] = conn_state
-    logger.info(f"ESP32 camera connected: {client_id}")
+    logger.info(f"ESP32 camera connected: {client_id}, device_id={device_id}")
 
     try:
         while True:
-            try:
-                header_data = await websocket.receive_text()
-                header      = json.loads(header_data)
-                req_id      = header.get("req_id", f"unknown-{int(time.time())}")
-                expected_size = header.get("size", 0)
+            # 🌟 改變接收方式：不再強制先等 Text，而是看 ESP32 丟什麼過來
+            message = await websocket.receive()
+            conn_state.last_heartbeat = time.time()
 
-                conn_state.last_heartbeat = time.time()
-                logger.info(f"Receiving image: req_id={req_id}, size={expected_size}")
-                app_coordinator.capture_coordinator.mark_capture_started(req_id, expected_size)
+            if "bytes" in message:
+                # ── Phase 2: 持續影像串流 (純 Bytes) ──
+                image_data = message["bytes"]
+                
+                # 如果是 Omni 模式，把圖片轉交給 OmniCoordinator 處理
+                if getattr(settings, 'omni_mode', False) and hasattr(app_coordinator, 'handle_camera_frame'):
+                    await app_coordinator.handle_camera_frame(image_data, device_id)
+                
+                # (選擇性) 如果你想把串流的畫面存下來 debug，可以取消底下註解
+                # timestamp = int(time.time() * 1000)
+                # filepath = IMAGES_DIR / f"stream_{timestamp}.jpg"
+                # with open(filepath, "wb") as f:
+                #     f.write(image_data)
 
-                image_data = await websocket.receive_bytes()
-
-                timestamp = int(time.time() * 1000)
-                filename  = f"{req_id}_{timestamp}.jpg"
-                filepath  = IMAGES_DIR / filename
-
-                with open(filepath, "wb") as f:
-                    f.write(image_data)
-
-                logger.info(f"Image saved: {filename} ({len(image_data)} bytes)")
-
-                event = Event(
-                    event_type=EventType.CAPTURE_RECEIVED.value,
-                    timestamp=time.time(),
-                    req_id=req_id,
-                    data={"filename": filename, "image_size": len(image_data), "format": "jpeg"},
-                )
-                await event_bus.publish(event)
-
+            elif "text" in message:
+                # ── 舊版 Batch 模式：收到 JSON 表頭 ──
                 try:
-                    await websocket.send_json({
-                        "status": "success", "req_id": req_id,
-                        "filename": filename, "size": len(image_data),
-                    })
-                except Exception as ack_err:
-                    logger.debug(f"Camera ack skipped for req_id={req_id}: {ack_err}")
+                    header = json.loads(message["text"])
+                    if header.get("type") == "pong":
+                        continue
+                        
+                    req_id = header.get("req_id", f"unknown-{int(time.time())}")
+                    expected_size = header.get("size", 0)
+                    logger.info(f"Receiving batch image: req_id={req_id}, size={expected_size}")
+                    
+                    if hasattr(app_coordinator, 'capture_coordinator'):
+                        app_coordinator.capture_coordinator.mark_capture_started(req_id, expected_size)
 
-            except json.JSONDecodeError:
-                logger.error("Invalid JSON header")
-                await websocket.send_json({"status": "error", "message": "Invalid JSON header"})
+                    # 舊版邏輯：收到 JSON 後，下一包必定是 Bytes
+                    image_data = await websocket.receive_bytes()
+                    timestamp = int(time.time() * 1000)
+                    filename  = f"{req_id}_{timestamp}.jpg"
+                    filepath  = IMAGES_DIR / filename
 
+                    with open(filepath, "wb") as f:
+                        f.write(image_data)
+                    logger.info(f"Batch image saved: {filename}")
+
+                    # 發佈事件給 AppCoordinator
+                    event = Event(
+                        event_type=EventType.CAPTURE_RECEIVED.value,
+                        timestamp=time.time(),
+                        req_id=req_id,
+                        data={"filename": filename, "image_size": len(image_data), "format": "jpeg"},
+                    )
+                    await event_bus.publish(event)
+                    
+                except json.JSONDecodeError:
+                    logger.error("Invalid JSON received on camera WS")
+                    
     except WebSocketDisconnect:
         logger.info(f"ESP32 camera disconnected: {client_id}")
     except Exception as e:
         logger.error(f"WebSocket camera error: {e}")
     finally:
-        # ✅ FIX 3: removed duplicate del that existed in original
         connected_clients.pop(client_id, None)
 
 

@@ -10,6 +10,20 @@ logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
+
+    omni_enabled: bool = Field(default=False, alias="OMNI_MODE")
+    
+    # 其他的變數因為英文字母拼法跟 .env 裡完全一樣 (不分大小寫)，
+    # 所以在 Pydantic v2 裡面，你甚至不需要寫 alias，它會自動完美配對！
+    omni_model: str = Field(default="qwen3.5-omni-plus-realtime", alias="OMNI_MODEL")
+    omni_voice: str = Field(default="Cherry")
+    omni_instructions: str = Field(default="你是一個配戴在眼鏡上的智能助手。用繁體中文回答，語句簡短自然。")
+    omni_vad_threshold: float = Field(default=0.5)
+    omni_vad_silence_ms: int = Field(default=800)
+    omni_enable_search: bool = Field(default=False, alias="OMNI_ENABLE_SEARCH")
+    omni_enable_transcription: bool = Field(default=True)
+    omni_session_refresh_min: int = Field(default=110)
+
     
     # ASR Service
     asr_model: str = Field(default="qwen3-asr-flash-realtime", env="ASR_MODEL")
@@ -42,7 +56,7 @@ class Settings(BaseSettings):
     tts_sample_rate: int = Field(default=16000, env="TTS_SAMPLE_RATE")
     tts_timeout_seconds: float = Field(default=5.0, env="TTS_TIMEOUT_SECONDS")
     tts_retry_attempts: int = Field(default=1, env="TTS_RETRY_ATTEMPTS")
-    tts_fallback_max_chars: int = Field(default=12, env="TTS_FALLBACK_MAX_CHARS")
+    tts_fallback_max_chars: int = Field(default=500, env="TTS_FALLBACK_MAX_CHARS")
     
     # Server Configuration
     server_host: str = Field(default="0.0.0.0", env="SERVER_HOST")
@@ -96,17 +110,24 @@ def load_settings() -> Settings:
 
 def validate_api_keys(settings: Settings) -> bool:
     """Validate that required API keys are present"""
-    if not settings.asr_api_key or settings.asr_api_key == "your_dashscope_api_key_here":
-        logger.error("ASR_API_KEY is not configured")
-        return False
-    
-    if not settings.vision_api_key or settings.vision_api_key == "your_vision_api_key_here":
-        logger.error("VISION_API_KEY is not configured")
-        return False
-    
-    if not settings.tts_api_key or settings.tts_api_key == "your_tts_api_key_here":
-        logger.error("TTS_API_KEY is not configured")
-        return False
+    # 這裡配合你的設定，改用 omni_mode 判斷
+    if getattr(settings, 'omni_mode', False):
+        # Omni mode only needs the ASR key (same Dashscope key) 
+        if not settings.asr_api_key or settings.asr_api_key == "your_dashscope_api_key_here":
+            logger.error("ASR_API_KEY is required for Omni mode (Dashscope API key)")
+            return False
+        logger.info("API key validated for Omni mode")
+    else:
+        # 原本的 Batch 模式需要檢查全部三個 
+        if not settings.asr_api_key or settings.asr_api_key == "your_dashscope_api_key_here":
+            logger.error("ASR_API_KEY is not configured")
+            return False
+        if not settings.vision_api_key or settings.vision_api_key == "your_vision_api_key_here":
+            logger.error("VISION_API_KEY is not configured")
+            return False
+        if not settings.tts_api_key or settings.tts_api_key == "your_tts_api_key_here":
+            logger.error("TTS_API_KEY is not configured")
+            return False
     
     logger.info("API keys validated successfully")
     return True
